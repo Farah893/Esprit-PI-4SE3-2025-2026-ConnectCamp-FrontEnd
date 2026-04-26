@@ -91,18 +91,17 @@ export class OrderService {
    * Accepts the broad shape used by client.component so it compiles.
    */
   create(orderData: {
-    userId?: number;
-    shippingName?: string;
-    shippingPhone?: string;
-    shippingAddress: string;
-    shippingCity?: string;
+    userId?:            number;
+    shippingName?:      string;
+    shippingPhone?:     string;
+    shippingAddress:    string;
+    shippingCity?:      string;
     shippingPostalCode?: string;
-    shippingCountry?: string;
-    paymentMethod: string;
-    notes?: string;
-    couponCode?: string;
-    // legacy fields from CreateOrderDto — ignored by backend but accepted here
-    items?: any[];
+    shippingCountry?:   string;
+    paymentMethod:      string;
+    notes?:             string;
+    couponCode?:        string;
+    items?:             any[];
   }): Observable<any> {
     const userId = orderData.userId ?? Number(this.getCurrentUserId() ?? 0);
 

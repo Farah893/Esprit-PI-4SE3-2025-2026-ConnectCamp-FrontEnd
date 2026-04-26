@@ -48,7 +48,7 @@
 
                         <!-- Price -->
                         <div class="font-black text-forest">
-                            {{ item.price | number:'1.2-2' }} DT
+                            {{ getLineTotal(item) | number:'1.2-2'  }} DT
                         </div>
                     </div>
                 </div>

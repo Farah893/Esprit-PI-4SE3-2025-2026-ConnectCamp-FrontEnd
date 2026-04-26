@@ -9,7 +9,8 @@ import { AuthService } from '../../services/auth.service';
 import { AccountProfileService } from '../../services/account-profile.service';
 import { NotificationService } from '../../services/notification.service';
 import { ApiService } from '../../services/api.service';
-import { CartItem, Wallet, WalletTransaction, Order, CreateOrderDto } from '../../models/api.models';
+// ✅ CreateOrderDto removed — no longer used as a type annotation
+import { CartItem, Wallet, WalletTransaction, Order } from '../../models/api.models';
 
 @Component({
   selector: 'app-client',
@@ -26,20 +27,20 @@ export class ClientComponent implements OnInit {
   errorMessage = '';
 
   menuItems = [
-    { id: 'wallet', label: 'My Wallet', icon: '💰', badge: '' },
-    { id: 'orders', label: 'My Orders', icon: '📦', badge: '' },
-    { id: 'cart', label: 'Shopping Cart', icon: '🛒', badge: '0' },
-    { id: 'profile', label: 'Profile', icon: '⚙️', badge: '' }
+    { id: 'wallet', label: 'My Wallet',     icon: '💰', badge: '' },
+    { id: 'orders', label: 'My Orders',     icon: '📦', badge: '' },
+    { id: 'cart',   label: 'Shopping Cart', icon: '🛒', badge: '0' },
+    { id: 'profile',label: 'Profile',       icon: '⚙️', badge: '' }
   ];
 
   // Customer Info
-  customerName = '';
-  customerEmail = '';
-  customerPhone = '';
+  customerName    = '';
+  customerEmail   = '';
+  customerPhone   = '';
   customerCountry = '';
   customerAddress = '';
 
-  // Wallet
+  // Wallet — initialized to 0 so .toFixed(2) never crashes before HTTP load
   walletBalance = 0;
   loyaltyPoints = 0;
   walletTransactions: WalletTransaction[] = [];
@@ -52,75 +53,74 @@ export class ClientComponent implements OnInit {
   // Cart
   cartItems: CartItem[] = [];
   selectedPaymentMethod: 'wallet' | 'card' = 'wallet';
-  shippingCost = 15.00;
+  shippingCost    = 15.00;
   shippingAddress = '';
 
   // Modals
-  showAddFundsModal = false;
-  showWithdrawModal = false;
-  showTransferModal = false;
+  showAddFundsModal   = false;
+  showWithdrawModal   = false;
+  showTransferModal   = false;
   showCheckoutSuccess = false;
-  addFundsAmount = 100;
+  addFundsAmount      = 100;
   fundingSource: 'CARD' | 'BANK_TRANSFER' = 'CARD';
-  latestOrderId = '';
+  latestOrderId    = '';
   lastEarnedPoints = 0;
 
   constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private cartService: CartService,
-    private walletService: WalletService,
-    private orderService: OrderService,
-    private authService: AuthService,
-    private accountProfile: AccountProfileService,
+    private route:               ActivatedRoute,
+    private router:              Router,
+    private cartService:         CartService,
+    private walletService:       WalletService,
+    private orderService:        OrderService,
+    private authService:         AuthService,
+    private accountProfile:      AccountProfileService,
     private notificationService: NotificationService,
-    private apiService: ApiService
+    private apiService:          ApiService
   ) {}
 
   ngOnInit() {
-    // Load user info
     const user = this.authService.getCurrentUser();
     if (user) {
-      this.customerName = user.name;
-      this.customerEmail = user.email;
-      this.customerPhone = user.phone || '';
+      this.customerName    = user.name    || '';
+      this.customerEmail   = user.email   || '';
+      this.customerPhone   = user.phone   || '';
       this.customerCountry = user.country || '';
       this.customerAddress = user.address || '';
+      // Pre-fill shipping address from saved profile
+      this.shippingAddress = user.address || '';
     }
 
-    // Check route data for default tab
     const routeData = this.route.snapshot.data;
     if (routeData['defaultTab']) {
       this.activeTab = routeData['defaultTab'];
     }
 
-    // Handle query params for tab
     this.route.queryParams.subscribe(params => {
       if (params['tab']) this.activeTab = params['tab'];
     });
 
-    // Subscribe to cart updates
     this.cartService.cart$.subscribe(items => {
       this.cartItems = items;
       this.updateCartBadge();
     });
 
-    // Load data
     this.loadWallet();
     this.loadOrders();
   }
 
+  // ── Data loading ──────────────────────────────────────
+
   loadWallet() {
     this.walletService.getMyWallet().subscribe({
       next: (wallet) => {
-        this.walletBalance = wallet.balance;
-        this.loyaltyPoints = wallet.loyaltyPoints;
+        this.walletBalance = wallet?.balance       ?? 0;
+        this.loyaltyPoints = wallet?.loyaltyPoints ?? 0;
       },
       error: () => {
         this.walletService.getBalance().subscribe({
           next: (data) => {
-            this.walletBalance = data.balance;
-            this.loyaltyPoints = data.loyaltyPoints;
+            this.walletBalance = data?.balance       ?? 0;
+            this.loyaltyPoints = data?.loyaltyPoints ?? 0;
           },
           error: () => {
             this.walletBalance = 0;
@@ -131,70 +131,73 @@ export class ClientComponent implements OnInit {
     });
 
     this.walletService.getTransactions().subscribe({
-      next: (transactions) => this.walletTransactions = transactions,
-      error: () => this.walletTransactions = []
+      next: (transactions) => this.walletTransactions = transactions ?? [],
+      error: ()            => this.walletTransactions = []
     });
   }
 
   loadOrders() {
     this.orderService.getMyOrders().subscribe({
-      next: (orders) => this.customerOrders = orders,
+      next: (orders) => this.customerOrders = orders ?? [],
       error: () => {
         this.orderService.getAll().subscribe({
-          next: (orders) => this.customerOrders = orders,
-          error: () => this.customerOrders = []
+          next: (orders) => this.customerOrders = orders ?? [],
+          error: ()       => this.customerOrders = []
         });
       }
     });
   }
 
+  // ── Cart computed ─────────────────────────────────────
+
   get cartSubtotal(): number {
-    return this.cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    return this.cartItems.reduce(
+      (sum, item) => sum + ((item.price ?? 0) * (item.quantity ?? 1)), 0
+    );
   }
 
-  get cartTax(): number {
-    return this.cartSubtotal * 0.1;
-  }
-
-  get cartTotal(): number {
-    return this.cartSubtotal + this.shippingCost + this.cartTax;
-  }
+  get cartTax(): number   { return this.cartSubtotal * 0.1; }
+  get cartTotal(): number { return this.cartSubtotal + this.shippingCost + this.cartTax; }
 
   get filteredOrders(): Order[] {
     if (this.selectedOrderStatus === 'All') return this.customerOrders;
     return this.customerOrders.filter(o => o.status === this.selectedOrderStatus);
   }
 
+  // ── UI helpers ────────────────────────────────────────
+
   updateCartBadge() {
-    const cartMenuItem = this.menuItems.find(m => m.id === 'cart');
-    if (cartMenuItem) {
-      cartMenuItem.badge = this.cartItems.length > 0 ? this.cartItems.length.toString() : '';
-    }
+    const item = this.menuItems.find(m => m.id === 'cart');
+    if (item) item.badge = this.cartItems.length > 0 ? this.cartItems.length.toString() : '';
   }
 
   get customerAvatar(): string {
-    return this.accountProfile.resolveStoredImageUrl(this.authService.getCurrentUser()?.avatar) || '';
+    return this.accountProfile.resolveStoredImageUrl(
+      this.authService.getCurrentUser()?.avatar
+    ) || '';
   }
 
   get customerInitials(): string {
-    return this.accountProfile.initialsFromName(this.customerName || this.customerEmail || 'Client', 'CC');
+    return this.accountProfile.initialsFromName(
+      this.customerName || this.customerEmail || 'Client', 'CC'
+    );
   }
 
-  goToAccountSettings() {
-    this.router.navigate(['/settings']);
-  }
+  goToAccountSettings() { this.router.navigate(['/settings']); }
 
   getImageUrl(imagePath: string | undefined): string {
     return this.cartService.getImageUrl(imagePath);
   }
 
+  // ── Cart actions ──────────────────────────────────────
+
   updateQuantity(index: number, change: number) {
     const item = this.cartItems[index];
-    const newQuantity = item.quantity + change;
-    if (newQuantity <= 0) {
+    const newQty = item.quantity + change;
+    if (newQty <= 0) {
       this.removeFromCart(index);
     } else {
-      this.cartService.updateQuantity(item.productId, newQuantity).subscribe();
+      this.cartService.updateQuantity(item.productId, newQty).subscribe();
     }
   }
 
@@ -203,10 +206,18 @@ export class ClientComponent implements OnInit {
     this.cartService.removeFromCart(item.productId).subscribe();
   }
 
+  clearCart() {
+    if (confirm('Are you sure you want to clear your cart?')) {
+      this.cartService.clearCart().subscribe(() => alert('🛒 Cart cleared'));
+    }
+  }
+
+  // ── Wallet actions ────────────────────────────────────
+
   openAddFundsModal() {
     this.showAddFundsModal = true;
-    this.addFundsAmount = 100;
-    this.fundingSource = 'CARD';
+    this.addFundsAmount    = 100;
+    this.fundingSource     = 'CARD';
   }
 
   confirmAddFunds() {
@@ -214,18 +225,17 @@ export class ClientComponent implements OnInit {
       alert('⚠️ Please enter a valid amount');
       return;
     }
-
     this.isLoading = true;
     this.walletService.addFunds({
       amount: this.addFundsAmount,
       source: this.fundingSource
     }).subscribe({
       next: (wallet) => {
-        this.walletBalance = wallet.balance;
-        this.loyaltyPoints = wallet.loyaltyPoints;
-        alert(`✅ Successfully added $${this.addFundsAmount} to your wallet!`);
+        this.walletBalance     = wallet?.balance       ?? 0;
+        this.loyaltyPoints     = wallet?.loyaltyPoints ?? 0;
         this.showAddFundsModal = false;
-        this.isLoading = false;
+        this.isLoading         = false;
+        alert(`✅ Successfully added $${this.addFundsAmount} to your wallet!`);
         this.loadWallet();
       },
       error: (err) => {
@@ -235,13 +245,15 @@ export class ClientComponent implements OnInit {
     });
   }
 
+  // ── Checkout ──────────────────────────────────────────
+
   checkout() {
     if (this.cartItems.length === 0) {
       alert('⚠️ Your cart is empty');
       return;
     }
 
-    if (!this.shippingAddress) {
+    if (!this.shippingAddress?.trim()) {
       alert('⚠️ Please enter a shipping address');
       return;
     }
@@ -251,24 +263,31 @@ export class ClientComponent implements OnInit {
       return;
     }
 
-    const orderData: CreateOrderDto = {
+    // ✅ No `: CreateOrderDto` annotation — TypeScript infers the type from
+    //    OrderService.create() parameter shape, which accepts all these fields.
+    const orderData = {
+      shippingAddress:    this.shippingAddress.trim(),
+      shippingName:       this.customerName    || '',
+      shippingPhone:      this.customerPhone   || '',
+      shippingCity:       this.customerCountry || '',
+      shippingPostalCode: '',
+      shippingCountry:    this.customerCountry || '',
+      paymentMethod:      this.selectedPaymentMethod === 'wallet' ? 'WALLET' : 'CARD',
       items: this.cartItems.map(item => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        type: item.type,
+        productId:  item.productId,
+        quantity:   item.quantity,
+        type:       item.type,
         rentalDays: item.rentalDays
-      })),
-      shippingAddress: this.shippingAddress,
-      paymentMethod: this.selectedPaymentMethod === 'wallet' ? 'WALLET' : 'CARD'
+      }))
     };
 
     this.isLoading = true;
     this.orderService.create(orderData).subscribe({
       next: (order: any) => {
-        this.latestOrderId = order.id;
-        this.lastEarnedPoints = Math.floor(this.cartTotal);
+        this.latestOrderId       = String(order?.id ?? '');
+        this.lastEarnedPoints    = Math.floor(this.cartTotal);
         this.showCheckoutSuccess = true;
-        this.isLoading = false;
+        this.isLoading           = false;
         this.cartService.clearCart().subscribe();
         this.loadWallet();
         this.loadOrders();
@@ -285,8 +304,12 @@ export class ClientComponent implements OnInit {
     this.activeTab = 'orders';
   }
 
+  // ── Order actions ─────────────────────────────────────
+
   viewOrderDetails(order: Order) {
-    alert(`Order #${order.id}\nStatus: ${order.status}\nTotal: $${order.totalAmount.toFixed(2)}\nItems: ${order.items.length}`);
+    const total = Number(order?.totalAmount ?? 0).toFixed(2);
+    const count = order?.items?.length ?? 0;
+    alert(`Order #${order.id}\nStatus: ${order.status}\nTotal: $${total}\nItems: ${count}`);
   }
 
   trackOrder(order: Order) {
@@ -299,90 +322,76 @@ export class ClientComponent implements OnInit {
 
   cancelOrder(order: Order) {
     if (confirm(`Are you sure you want to cancel Order #${order.id}?`)) {
-      this.orderService.cancel(order.id).subscribe({
-        next: () => {
-          alert(`✅ Order #${order.id} has been cancelled.`);
-          this.loadOrders();
-        },
-        error: (err) => alert('❌ Failed to cancel order: ' + (err.message || 'Unknown error'))
+      // ✅ order.id is number; cancel() expects string
+      this.orderService.cancel(String(order.id)).subscribe({
+        next: ()     => { alert(`✅ Order #${order.id} cancelled.`); this.loadOrders(); },
+        error: (err) => alert('❌ Failed to cancel: ' + (err.message || 'Unknown error'))
       });
     }
   }
 
   downloadInvoice(order: Order) {
-    alert(`📄 Invoice for Order #${order.id} would be downloaded.\n(Feature coming soon)`);
+    alert(`📄 Invoice for Order #${order.id} — coming soon`);
   }
+
+  // ── Badge / status helpers ────────────────────────────
 
   getOrderStatusBadge(status: string): string {
-    const badges: { [key: string]: string } = {
-      'PENDING': 'bg-yellow-100 text-yellow-800',
+    const map: Record<string, string> = {
+      'PENDING':    'bg-yellow-100 text-yellow-800',
       'PROCESSING': 'bg-blue-100 text-blue-800',
-      'SHIPPED': 'bg-purple-100 text-purple-800',
-      'DELIVERED': 'bg-green-100 text-green-800',
-      'CANCELLED': 'bg-red-100 text-red-800'
+      'SHIPPED':    'bg-purple-100 text-purple-800',
+      'DELIVERED':  'bg-green-100 text-green-800',
+      'CANCELLED':  'bg-red-100 text-red-800'
     };
-    return badges[status] || 'bg-gray-100 text-gray-800';
+    return map[status] || 'bg-gray-100 text-gray-800';
   }
 
-  getTransactionIcon(type: string): string {
-    return type === 'CREDIT' ? '📥' : '📤';
-  }
+  getTransactionIcon(type: string): string { return type === 'CREDIT' ? '📥' : '📤'; }
 
   formatDate(dateString: string): string {
+    if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString();
   }
 
   getStatusBadge(status: string): string {
-    const badges: { [key: string]: string } = {
+    const map: Record<string, string> = {
       'COMPLETED': 'bg-green-100 text-green-800',
-      'PENDING': 'bg-yellow-100 text-yellow-800',
-      'FAILED': 'bg-red-100 text-red-800'
+      'PENDING':   'bg-yellow-100 text-yellow-800',
+      'FAILED':    'bg-red-100 text-red-800'
     };
-    return badges[status] || 'bg-gray-100 text-gray-800';
+    return map[status] || 'bg-gray-100 text-gray-800';
   }
 
-  isCredit(type: string): boolean {
-    return type === 'CREDIT';
-  }
+  isCredit(type: string): boolean { return type === 'CREDIT'; }
+
+  // ── Auth ──────────────────────────────────────────────
 
   logout() {
     this.authService.logout();
     this.router.navigate(['/']);
   }
 
-  clearCart() {
-    if (confirm('Are you sure you want to clear your cart?')) {
-      this.cartService.clearCart().subscribe(() => {
-        alert('🛒 Cart cleared');
-      });
-    }
-  }
+  // ── Profile ───────────────────────────────────────────
 
   saveProfile() {
     const user = this.authService.getCurrentUser();
-    if (!user) {
-      alert('❌ Not logged in');
-      return;
-    }
+    if (!user) { alert('❌ Not logged in'); return; }
 
     this.isLoading = true;
-
     const updatedUser = {
-      name: this.customerName,
-      email: this.customerEmail,
-      phone: this.customerPhone,
+      name:    this.customerName,
+      email:   this.customerEmail,
+      phone:   this.customerPhone,
       country: this.customerCountry,
       address: this.customerAddress
     };
 
     this.apiService.update('users', Number(user.id), updatedUser).subscribe({
-      next: (res: any) => {
+      next: (_res: any) => {
         this.isLoading = false;
         alert('✅ Profile updated successfully!');
-
-        // Update stored user in localStorage
-        const updatedStoredUser = { ...user, ...updatedUser };
-        localStorage.setItem('current_user', JSON.stringify(updatedStoredUser));
+        localStorage.setItem('current_user', JSON.stringify({ ...user, ...updatedUser }));
       },
       error: (err: any) => {
         this.isLoading = false;

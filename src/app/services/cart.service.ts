@@ -227,7 +227,6 @@ export class CartService {
 
       this.cartSubject.next(merged);
       this.saveLocalCart(merged);
-      this.clearLocalCart();
     });
   }
 }

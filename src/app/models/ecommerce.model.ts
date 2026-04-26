@@ -71,19 +71,43 @@ export interface Subcategory {
 }
 
 // ========== ORDERS ==========
+// ========== ORDERS ==========
 export interface Order {
   id: number;
   customerName: string;
   orderDate: string;
+  createdAt: string;        // ✅ add — used by formatDate(order.createdAt)
   status: string;
   totalAmount: number;
+  trackingNumber?: string;  // ✅ add — used in template
   items: OrderItem[];
 }
 
 export interface OrderItem {
   productName: string;
   quantity: number;
-  price: number;
+  price: number;            // ✅ keep existing field
+  type?: string;            // ✅ add — used for RENTAL badge
+  rentalDays?: number;      // ✅ add — used for rental duration
+}
+
+// ✅ Add this — used by checkout()
+export interface CreateOrderDto {
+  items: {
+    productId: string;
+    quantity: number;
+    type?: string;
+    rentalDays?: number;
+  }[];
+  shippingAddress:    string;
+  shippingName:       string;    // ✅ add
+  shippingPhone:      string;    // ✅ add
+  shippingCity:       string;    // ✅ add
+  shippingPostalCode: string;    // ✅ add
+  shippingCountry:    string;    // ✅ add
+  paymentMethod:      string;
+  notes?:             string;
+  couponCode?:        string;
 }
 
 export interface DashboardStats {
