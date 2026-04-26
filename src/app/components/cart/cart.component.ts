@@ -69,7 +69,7 @@ export class CartComponent {
 
     incrementQuantity(item: CartItem) {
         item.quantity++;
-        // In a real app, unit price would be separate from total line price, 
+        // In a real app, unit price would be separate from total line price,
         // but for this mock we'll just adjust the price based on ratio or keep it simple
         // Let's assume 'price' in the mock is the line total for simplicity of the screenshot matching
         // For functionality, we'd want unit price. Let's infer unit price.

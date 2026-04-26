@@ -21,9 +21,9 @@ export class InventoryService {
     return this.http.get<any>(this.url).pipe(map(unwrap));
   }
 
-  /** GET /api/inventory/alerts — items below threshold */
+  /** GET /api/inventory/low-stock — items below threshold */
   getAlerts(): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/alerts`).pipe(map(unwrap));
+    return this.http.get<any>(`${this.url}/low-stock`).pipe(map(unwrap));
   }
 
   /** GET /api/inventory/product/{productId} */
@@ -51,18 +51,33 @@ export class InventoryService {
     return this.http.delete<any>(`${this.url}/${id}`);
   }
 
-  /** POST /api/inventory/{id}/movement — record stock movement */
-  recordMovement(id: string, data: {
-    type: 'IN' | 'OUT' | 'ADJUSTMENT' | 'TRANSFER';
-    quantity: number;
-    notes?: string;
-  }): Observable<any> {
-    return this.http.post<any>(`${this.url}/${id}/movement`, data).pipe(map(unwrapOne));
+  /** POST /api/inventory/{id}/adjust — adjust stock quantity */
+  adjustStock(id: string, adjustment: number, reason?: string): Observable<any> {
+    let params = new HttpParams().set('adjustment', adjustment.toString());
+    if (reason) params = params.set('reason', reason);
+    return this.http.post<any>(`${this.url}/${id}/adjust`, null, { params }).pipe(map(unwrapOne));
   }
 
-  /** GET /api/inventory/{id}/movements — movement history */
-  getMovements(id: string): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/${id}/movements`).pipe(map(unwrap));
+  /** POST /api/inventory/{id}/reserve — reserve stock */
+  reserveStock(id: string, quantity: number): Observable<any> {
+    const params = new HttpParams().set('quantity', quantity.toString());
+    return this.http.post<any>(`${this.url}/${id}/reserve`, null, { params }).pipe(map(unwrapOne));
+  }
+
+  /** POST /api/inventory/{id}/release — release reserved stock */
+  releaseStock(id: string, quantity: number): Observable<any> {
+    const params = new HttpParams().set('quantity', quantity.toString());
+    return this.http.post<any>(`${this.url}/${id}/release`, null, { params }).pipe(map(unwrapOne));
+  }
+
+  /** PUT /api/inventory/{id} — update inventory */
+  update(id: string, data: any): Observable<any> {
+    return this.http.put<any>(`${this.url}/${id}`, data).pipe(map(unwrapOne));
+  }
+
+  /** POST /api/inventory/{id}/movement — record a stock IN/OUT movement */
+  recordMovement(id: string, data: { type: string; quantity: number }): Observable<any> {
+    return this.http.post<any>(`${this.url}/${id}/movement`, data).pipe(map(unwrapOne));
   }
 }
 
@@ -80,26 +95,6 @@ export class RentalService {
     return this.http.get<any>(this.url).pipe(map(unwrap));
   }
 
-  /** GET /api/rentals/my-rentals — current user's rentals */
-  getMyRentals(): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/my-rentals`).pipe(map(unwrap));
-  }
-
-  /** GET /api/rentals/active */
-  getActive(): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/active`).pipe(map(unwrap));
-  }
-
-  /** GET /api/rentals/overdue */
-  getOverdue(): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/overdue`).pipe(map(unwrap));
-  }
-
-  /** GET /api/rentals/ending-soon */
-  getEndingSoon(): Observable<any[]> {
-    return this.http.get<any>(`${this.url}/ending-soon`).pipe(map(unwrap));
-  }
-
   /** GET /api/rentals/user/{userId} */
   getByUser(userId: string): Observable<any[]> {
     return this.http.get<any>(`${this.url}/user/${userId}`).pipe(map(unwrap));
@@ -110,35 +105,45 @@ export class RentalService {
     return this.http.get<any>(`${this.url}/${id}`).pipe(map(unwrapOne));
   }
 
+  /** GET /api/rentals/number/{number} */
+  getByNumber(number: string): Observable<any> {
+    return this.http.get<any>(`${this.url}/number/${number}`).pipe(map(unwrapOne));
+  }
+
   /** POST /api/rentals */
   create(data: any): Observable<any> {
     return this.http.post<any>(this.url, data).pipe(map(unwrapOne));
   }
 
-  /** POST /api/rentals/{id}/return */
+  /** PATCH /api/rentals/{id}/status — update rental status */
+  updateStatus(id: string, status: string): Observable<any> {
+    const params = new HttpParams().set('status', status);
+    return this.http.patch<any>(`${this.url}/${id}/status`, null, { params }).pipe(map(unwrapOne));
+  }
+
+  /** Mark as returned = update status to RETURNED */
   markReturned(id: string): Observable<any> {
-    return this.http.post<any>(`${this.url}/${id}/return`, {}).pipe(map(unwrapOne));
+    return this.updateStatus(id, 'RETURNED');
   }
 
-  /** POST /api/rentals/{id}/extend */
-  extend(id: string, data: { additionalDays: number }): Observable<any> {
-    return this.http.post<any>(`${this.url}/${id}/extend`, data).pipe(map(unwrapOne));
-  }
-
-  /** POST /api/rentals/{id}/cancel */
+  /** Cancel rental = update status to CANCELLED */
   cancel(id: string): Observable<any> {
-    return this.http.post<any>(`${this.url}/${id}/cancel`, {}).pipe(map(unwrapOne));
+    return this.updateStatus(id, 'CANCELLED');
   }
 
-  /** POST /api/rentals/update-overdue — batch update overdue status */
-  updateOverdue(): Observable<any> {
-    return this.http.post<any>(`${this.url}/update-overdue`, {});
+  /** PATCH /api/rentals/{id}/extend — extend rental by additional days */
+  extend(id: string, data: { additionalDays: number }): Observable<any> {
+    return this.http.patch<any>(`${this.url}/${id}/extend`, data).pipe(map(unwrapOne));
   }
 
-  /** Convenience: send reminder = just a GET on overdue to flag it
-   *  (no dedicated endpoint exists — trigger overdue update instead) */
+  /** POST /api/rentals/{id}/reminder — send return reminder to customer */
   sendReminder(id: string): Observable<any> {
-    return this.updateOverdue();
+    return this.http.post<any>(`${this.url}/${id}/reminder`, null).pipe(map(unwrapOne));
+  }
+
+  /** DELETE /api/rentals/{id} */
+  delete(id: string): Observable<any> {
+    return this.http.delete<any>(`${this.url}/${id}`);
   }
 }
 

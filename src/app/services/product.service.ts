@@ -45,17 +45,34 @@ export class ProductService {
 
   // ── Public / Seller ────────────────────────────────────
   /** GET /api/products — used by marketplace, accepts optional filters */
-  getAll(filters?: { isActive?: boolean; categoryId?: string }): Observable<any[]> {
-    let params = new HttpParams();
-    if (filters?.isActive !== undefined) params = params.set('isActive', String(filters.isActive));
-    if (filters?.categoryId) params = params.set('categoryId', filters.categoryId);
+  getAll(page = 0, size = 100, filters?: { isActive?: boolean; categoryId?: string }): Observable<any[]> {
+    let params = new HttpParams()
+      .set('page', page)
+      .set('size', size);
+
+    if (filters?.isActive !== undefined) {
+      params = params.set('isActive', String(filters.isActive));
+    }
+
+    if (filters?.categoryId) {
+      params = params.set('categoryId', filters.categoryId);
+    }
+
     return this.http.get<any>(this.url, { params }).pipe(map(unwrap));
   }
-
   getActive(): Observable<any[]> {
     return this.http.get<any>(`${this.url}/active`).pipe(map(unwrap));
   }
+  getBySeller(sellerId: string, page = 0, size = 100): Observable<any[]> {
+    let params = new HttpParams()
+      .set('sellerId', sellerId)
+      .set('page', page)
+      .set('size', size);
 
+    return this.http
+      .get<any>(this.url, { params })
+      .pipe(map(unwrap));
+  }
   getFeatured(): Observable<any[]> {
     return this.http.get<any>(`${this.url}/featured`).pipe(map(unwrap));
   }

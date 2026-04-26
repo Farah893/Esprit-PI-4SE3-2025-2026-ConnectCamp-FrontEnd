@@ -38,6 +38,12 @@ export class RentalService {
     return this.http.get<ApiResponse<Rental[]>>(this.apiUrl, { params: httpParams })
       .pipe(map(res => this.extractData(res)));
   }
+  sendReminder(id: string): Observable<any> {
+    return this.http.post<ApiResponse<any>>(
+      `${this.apiUrl}/${id}/reminder`,
+      {}
+    ).pipe(map(res => this.extractData(res)));
+  }
 
   getById(id: string): Observable<Rental> {
     return this.http.get<ApiResponse<Rental>>(`${this.apiUrl}/${id}`)

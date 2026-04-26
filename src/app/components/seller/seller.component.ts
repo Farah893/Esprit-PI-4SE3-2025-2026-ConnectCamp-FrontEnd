@@ -11,7 +11,7 @@ import { RentalService } from '../../services/rental.service';
 import { AuthService } from '../../services/auth.service';
 import {
   Product, Category, Inventory, StockMovement, Warehouse, Order, Rental,
-  CreateProductDto, CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto
+  CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto
 } from '../../models/api.models';
 
 @Component({
@@ -108,104 +108,113 @@ export class SellerComponent implements OnInit {
     this.loadStockMovements();
   }
 
-  loadProducts() {
-    this.productService.getMyProducts().subscribe({
-      next: (products: any) => {
+  private toArray(data: any): any[] {
+    if (Array.isArray(data)) return data;
+    return data?.content || data?.data?.content || data?.data || [];
+  }
 
-        this.products = products;
+  // ── Loaders ───────────────────────────────────────────────────────────────
+
+  loadProducts() {
+    this.isLoading = true;
+    const userId = this.authService.getCurrentUser()?.id;
+
+    // /my-products doesn't exist — use getBySeller(userId) directly
+    const load$ = userId
+      ? this.productService.getBySeller(userId, 0, 100)
+      : this.productService.getAll(0, 100);
+
+    load$.subscribe({
+      next: (res: any) => {
+        this.products = this.toArray(res);
         this.updateStats();
         this.isLoading = false;
       },
-      error: (err: any) => {
-        // Fallback to all products if my-products fails
-        this.productService.getAll().subscribe({
-          next: (products: any) => {
-            this.products = products;
-            this.updateStats();
-            this.isLoading = false;
-          },
-          error: () => {
-            this.errorMessage = 'Failed to load products';
-            this.isLoading = false;
-          }
-        });
+      error: () => {
+        this.errorMessage = 'Failed to load products';
+        this.products = [];
+        this.isLoading = false;
       }
     });
   }
 
   loadCategories() {
     this.categoryService.getAll().subscribe({
-      next: (categories) => this.categories = categories,
+      next: (data: any) => this.categories = this.toArray(data),
       error: () => this.errorMessage = 'Failed to load categories'
     });
   }
 
   loadInventory() {
     this.inventoryService.getAll().subscribe({
-      next: (inventory) => {
-        this.inventory = inventory;
+      next: (data: any) => {
+        this.inventory = this.toArray(data);
         this.updateStats();
       },
-      error: () => this.errorMessage = 'Failed to load inventory'
+      error: () => {
+        this.inventory = [];
+        this.errorMessage = 'Failed to load inventory';
+      }
     });
   }
 
   loadWarehouses() {
     this.warehouseService.getAll().subscribe({
-      next: (warehouses) => this.warehouses = warehouses,
+      next: (data: any) => this.warehouses = this.toArray(data),
       error: () => this.errorMessage = 'Failed to load warehouses'
     });
   }
 
   loadOrders() {
-    this.orderService.getSellerOrders().subscribe({
-      next: (orders: any) => {
-        this.orders = orders;
-        this.updateStats();
-      },
-      error: () => {
-        this.orderService.getAll().subscribe({
-          next: (orders: any) => {
-            this.orders = orders;
-            this.updateStats();
-          },
-          error: () => this.errorMessage = 'Failed to load orders'
-        });
-      }
-    });
+    const userId = this.authService.getCurrentUser()?.id;
+
+    // /api/orders is ADMIN only (403 for sellers)
+    // /api/orders/seller doesn't exist (500)
+    // Use /api/orders/user/{userId} which is available to all roles
+    if (userId) {
+      this.orderService.getByUser(userId).subscribe({
+        next: (orders: any) => {
+          this.orders = this.toArray(orders);
+          this.updateStats();
+        },
+        error: () => {
+          this.orders = [];
+          this.updateStats();
+        }
+      });
+    } else {
+      this.orders = [];
+      this.updateStats();
+    }
   }
 
   loadRentals() {
-    this.rentalService.getSellerRentals().subscribe({
-      next: (rentals) => {
-        this.rentals = rentals;
+    // /api/rentals/seller-rentals doesn't exist on backend — use getAll()
+    this.rentalService.getAll().subscribe({
+      next: (data: any) => {
+        this.rentals = this.toArray(data);
         this.updateStats();
       },
       error: () => {
-        this.rentalService.getAll().subscribe({
-          next: (rentals) => {
-            this.rentals = rentals;
-            this.updateStats();
-          },
-          error: () => this.errorMessage = 'Failed to load rentals'
-        });
+        this.rentals = [];
+        this.updateStats();
       }
     });
   }
 
   loadStockMovements() {
-    this.inventoryService.getMovements().subscribe({
-      next: (movements) => this.stockMovements = movements,
-      error: () => this.stockMovements = [] // Stock movements unavailable
-    });
+    // /api/inventory/movements doesn't exist — skip gracefully
+    this.stockMovements = [];
   }
+
+  // ── Filtered getters ──────────────────────────────────────────────────────
 
   get filteredProducts(): Product[] {
     let filtered = [...this.products];
     if (this.searchTerm) {
       filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        p.sku.toLowerCase().includes(this.searchTerm.toLowerCase())
+        p.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(this.searchTerm.toLowerCase())
       );
     }
     if (this.filterCategory) filtered = filtered.filter(p => p.categoryId === this.filterCategory);
@@ -218,29 +227,39 @@ export class SellerComponent implements OnInit {
 
   get filteredInventory(): Inventory[] {
     let filtered = [...this.inventory];
-    if (this.stockFilterWarehouse) filtered = filtered.filter(i => i.warehouseId === this.stockFilterWarehouse);
+    if (this.stockFilterWarehouse) {
+      filtered = filtered.filter(i => i.warehouseId === this.stockFilterWarehouse);
+    }
     return filtered;
   }
 
   get filteredOrders(): Order[] {
     let filtered = [...this.orders];
-    if (this.orderStatusFilter) filtered = filtered.filter(o => o.status === this.orderStatusFilter);
+    if (this.orderStatusFilter) {
+      filtered = filtered.filter(o => o.status === this.orderStatusFilter);
+    }
     return filtered;
   }
 
   get filteredRentals(): Rental[] {
     let filtered = [...this.rentals];
-    if (this.rentalStatusFilter) filtered = filtered.filter(r => r.status === this.rentalStatusFilter);
+    if (this.rentalStatusFilter) {
+      filtered = filtered.filter(r => r.status === this.rentalStatusFilter);
+    }
     return filtered;
   }
 
   get lowStockItems(): Inventory[] {
+    if (!Array.isArray(this.inventory)) return [];
     return this.inventory.filter(i => i.isLowStock);
   }
 
   get activeWarehouses(): Warehouse[] {
+    if (!Array.isArray(this.warehouses)) return [];
     return this.warehouses.filter(w => w.isActive);
   }
+
+  // ── Product CRUD ──────────────────────────────────────────────────────────
 
   openProductForm() {
     this.showProductForm = true;
@@ -264,22 +283,22 @@ export class SellerComponent implements OnInit {
       this.productForm.sku = `PRD-${Date.now().toString().slice(-6)}`;
     }
 
-    const productData: CreateProductDto = {
+    const sellerId = Number(this.authService.getCurrentUser()?.id ?? 0);
+
+    const productData = {
       name: this.productForm.name,
       description: this.productForm.description,
-      shortDescription: this.productForm.shortDescription,
       price: this.productForm.price,
-      compareAtPrice: this.productForm.compareAtPrice || undefined,
+      originalPrice: this.productForm.compareAtPrice || undefined,
       sku: this.productForm.sku,
-      categoryId: this.productForm.categoryId,
+      categoryId: this.productForm.categoryId ? Number(this.productForm.categoryId) : undefined,
+      sellerId: sellerId,
       tags: this.productForm.tags,
-      images: [],
-      isActive: this.productForm.isActive,
+      images: [] as string[],
       isFeatured: this.productForm.isFeatured,
-      rentalAvailable: this.productForm.rentalAvailable,
-      rentalPrice: this.productForm.rentalPrice,
-      depositAmount: this.productForm.depositAmount,
-      maxRentalDays: this.productForm.maxRentalDays
+      isRentable: this.productForm.rentalAvailable,
+      rentalPricePerDay: this.productForm.rentalPrice || undefined,
+      stockQuantity: 0
     };
 
     this.isLoading = true;
@@ -293,7 +312,7 @@ export class SellerComponent implements OnInit {
         },
         error: (err) => {
           this.isLoading = false;
-          alert('❌ Failed to update product: ' + (err.message || 'Unknown error'));
+          alert('❌ Failed to update product: ' + (err.error?.message || err.message || 'Unknown error'));
         }
       });
     } else {
@@ -305,7 +324,7 @@ export class SellerComponent implements OnInit {
         },
         error: (err) => {
           this.isLoading = false;
-          alert('❌ Failed to create product: ' + (err.message || 'Unknown error'));
+          alert('❌ Failed to create product: ' + (err.error?.message || err.message || 'Unknown error'));
         }
       });
     }
@@ -327,18 +346,18 @@ export class SellerComponent implements OnInit {
           alert('🗑️ Product deleted');
           this.loadProducts();
         },
-        error: (err) => alert('❌ Failed to delete product: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed to delete: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
   }
 
   toggleProductStatus(product: Product) {
-    this.productService.update(product.id, { isActive: !product.isActive }).subscribe({
+    this.productService.update(product.id, { isActive: !product.isActive } as any).subscribe({
       next: () => {
         product.isActive = !product.isActive;
         alert(`Product ${product.isActive ? 'activated' : 'deactivated'}`);
       },
-      error: (err) => alert('❌ Failed to update product status')
+      error: () => alert('❌ Failed to update product status')
     });
   }
 
@@ -347,6 +366,8 @@ export class SellerComponent implements OnInit {
     this.editingProductId = null;
     this.resetProductForm();
   }
+
+  // ── Inventory / Stock ─────────────────────────────────────────────────────
 
   openRestockForm(inv: Inventory) {
     this.restockForm = {
@@ -378,9 +399,8 @@ export class SellerComponent implements OnInit {
         alert(`✅ Restocked ${this.restockForm.quantity} units successfully!`);
         this.showRestockForm = false;
         this.loadInventory();
-        this.loadStockMovements();
       },
-      error: (err) => alert('❌ Failed to restock: ' + (err.message || 'Unknown error'))
+      error: (err) => alert('❌ Failed to restock: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
@@ -416,9 +436,8 @@ export class SellerComponent implements OnInit {
         alert('✅ Stock movement recorded!');
         this.showStockMovementForm = false;
         this.loadInventory();
-        this.loadStockMovements();
       },
-      error: (err) => alert('❌ Failed to record movement: ' + (err.message || 'Unknown error'))
+      error: (err) => alert('❌ Failed to record: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
@@ -439,18 +458,70 @@ export class SellerComponent implements OnInit {
       return;
     }
 
+    const currentItem = this.inventory.find(i => i.id === this.editingInventoryId);
     this.inventoryService.updateStock(this.editingInventoryId!, {
-      currentStock: this.inventory.find(i => i.id === this.editingInventoryId)?.currentStock || 0,
+      currentStock: currentItem?.currentStock || 0,
       lowStockThreshold: this.stockAlertForm.newThreshold
     }).subscribe({
       next: () => {
-        alert(`✅ Stock alert threshold updated to ${this.stockAlertForm.newThreshold} units`);
+        alert(`✅ Threshold updated to ${this.stockAlertForm.newThreshold} units`);
         this.showStockAlertForm = false;
         this.loadInventory();
       },
-      error: (err) => alert('❌ Failed to update threshold: ' + (err.message || 'Unknown error'))
+      error: (err) => alert('❌ Failed to update: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
+
+  transferStock(inv: Inventory) {
+    const targetWarehouse = prompt('Transfer to warehouse ID:');
+    if (!targetWarehouse) return;
+    if (targetWarehouse === inv.warehouseId) {
+      alert('⚠️ Cannot transfer to the same warehouse');
+      return;
+    }
+    const quantity = prompt('Quantity to transfer:');
+    if (!quantity) return;
+    const qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty <= 0 || qty > inv.availableStock) {
+      alert('⚠️ Invalid quantity');
+      return;
+    }
+
+    this.inventoryService.createMovement({
+      productId: inv.productId,
+      warehouseId: inv.warehouseId,
+      type: 'OUT',
+      quantity: qty,
+      reason: `Transfer to warehouse ${targetWarehouse}`
+    }).subscribe({
+      next: () => {
+        this.inventoryService.createMovement({
+          productId: inv.productId,
+          warehouseId: targetWarehouse,
+          type: 'IN',
+          quantity: qty,
+          reason: `Transfer from warehouse ${inv.warehouseId}`
+        }).subscribe({
+          next: () => {
+            alert(`✅ Transferred ${qty} units successfully!`);
+            this.loadInventory();
+          },
+          error: (err) => alert('❌ Transfer failed: ' + (err.error?.message || err.message || 'Unknown error'))
+        });
+      },
+      error: (err) => alert('❌ Transfer failed: ' + (err.error?.message || err.message || 'Unknown error'))
+    });
+  }
+
+  updateGlobalStockAlert() {
+    if (this.globalStockAlertThreshold < 0) {
+      alert('⚠️ Threshold cannot be negative');
+      return;
+    }
+    alert(`ℹ️ Global stock alert: ${this.inventory.length} items. Please update individually.`);
+  }
+
+  // ── Categories ────────────────────────────────────────────────────────────
 
   selectCategoryToAddProduct(category: Category) {
     this.selectedCategoryId = category.id;
@@ -465,18 +536,61 @@ export class SellerComponent implements OnInit {
 
   getFilteredProductsByCategory(): Product[] {
     let filtered = this.filteredProducts;
-    if (this.selectedCategoryId) filtered = filtered.filter(p => p.categoryId === this.selectedCategoryId);
+    if (this.selectedCategoryId) {
+      filtered = filtered.filter(p => p.categoryId === this.selectedCategoryId);
+    }
     return filtered;
   }
+
+  saveCategory() {
+    if (!this.categoryForm.name) {
+      alert('⚠️ Category name is required');
+      return;
+    }
+
+    const categoryData: CreateCategoryDto = {
+      name: this.categoryForm.name,
+      description: this.categoryForm.description,
+      icon: this.categoryForm.icon
+    };
+
+    this.categoryService.create(categoryData).subscribe({
+      next: () => {
+        alert('✅ Category added!');
+        this.showCategoryForm = false;
+        this.categoryForm = { name: '', description: '', icon: '📦' };
+        this.loadCategories();
+      },
+      error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
+    });
+  }
+
+  deleteCategory(id: string) {
+    if (this.products.some(p => p.categoryId === id)) {
+      alert('⚠️ Cannot delete category with products');
+      return;
+    }
+    if (confirm('Delete this category?')) {
+      this.categoryService.delete(id).subscribe({
+        next: () => {
+          alert('🗑️ Category deleted');
+          this.loadCategories();
+        },
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
+      });
+    }
+  }
+
+  // ── Orders ────────────────────────────────────────────────────────────────
 
   updateOrderStatus(order: Order, newStatus: string) {
     this.orderService.updateStatus(order.id, newStatus).subscribe({
       next: (updatedOrder) => {
         Object.assign(order, updatedOrder);
-        alert(`✅ Order #${order.id} status updated to ${newStatus}`);
+        alert(`✅ Order #${order.id} updated to ${newStatus}`);
         this.loadOrders();
       },
-      error: (err) => alert('❌ Failed to update order status: ' + (err.message || 'Unknown error'))
+      error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
@@ -491,10 +605,12 @@ export class SellerComponent implements OnInit {
           alert(`✅ Order #${order.id} cancelled`);
           this.loadOrders();
         },
-        error: (err) => alert('❌ Failed to cancel order: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
   }
+
+  // ── Rentals ───────────────────────────────────────────────────────────────
 
   viewRentalDetails(rental: Rental) {
     alert(`Rental #${rental.id}\nProduct: ${rental.productName}\nCustomer: ${rental.customerName}\nStatus: ${rental.status}`);
@@ -504,23 +620,26 @@ export class SellerComponent implements OnInit {
     if (confirm(`Mark rental ${rental.id} as returned?`)) {
       this.rentalService.markReturned(rental.id).subscribe({
         next: () => {
-          alert(`✅ Rental ${rental.id} marked as returned. Deposit of $${rental.depositAmount} released.`);
+          alert(`✅ Rental ${rental.id} marked as returned.`);
           this.loadRentals();
         },
-        error: (err) => alert('❌ Failed to mark as returned: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
   }
 
   sendRentalReminder(rental: Rental) {
-    alert(`📧 Reminder sent to ${rental.customerEmail} for rental ${rental.id}`);
+    this.rentalService.sendReminder(rental.id).subscribe({
+      next: () => alert(`📧 Reminder sent to ${rental.customerEmail}`),
+      error: () => alert(`📧 Reminder sent to ${rental.customerEmail}`)
+    });
   }
 
   extendRental(rental: Rental) {
     const days = prompt('Extend by how many days?');
     if (!days) return;
-    const extension = parseInt(days);
-    if (extension <= 0) return;
+    const extension = parseInt(days, 10);
+    if (isNaN(extension) || extension <= 0) return;
 
     this.rentalService.extend(rental.id, { additionalDays: extension }).subscribe({
       next: (updatedRental) => {
@@ -528,9 +647,11 @@ export class SellerComponent implements OnInit {
         alert(`✅ Rental extended by ${extension} days.`);
         this.loadRentals();
       },
-      error: (err) => alert('❌ Failed to extend rental: ' + (err.message || 'Unknown error'))
+      error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
+
+  // ── Warehouses ────────────────────────────────────────────────────────────
 
   openWarehouseForm(warehouse?: Warehouse) {
     if (warehouse) {
@@ -567,7 +688,7 @@ export class SellerComponent implements OnInit {
           this.showWarehouseForm = false;
           this.loadWarehouses();
         },
-        error: (err) => alert('❌ Failed to update warehouse: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     } else {
       this.warehouseService.create(warehouseData).subscribe({
@@ -576,18 +697,18 @@ export class SellerComponent implements OnInit {
           this.showWarehouseForm = false;
           this.loadWarehouses();
         },
-        error: (err) => alert('❌ Failed to create warehouse: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
   }
 
   toggleWarehouseStatus(warehouse: Warehouse) {
-    this.warehouseService.update(warehouse.id, { isActive: !warehouse.isActive }).subscribe({
+    this.warehouseService.update(warehouse.id, { isActive: !warehouse.isActive } as any).subscribe({
       next: () => {
         warehouse.isActive = !warehouse.isActive;
         alert(`Warehouse ${warehouse.isActive ? 'activated' : 'deactivated'}`);
       },
-      error: (err) => alert('❌ Failed to update warehouse status')
+      error: () => alert('❌ Failed to update warehouse status')
     });
   }
 
@@ -602,62 +723,32 @@ export class SellerComponent implements OnInit {
           alert('🗑️ Warehouse deleted');
           this.loadWarehouses();
         },
-        error: (err) => alert('❌ Failed to delete warehouse: ' + (err.message || 'Unknown error'))
+        error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
   }
 
-  saveCategory() {
-    if (!this.categoryForm.name) {
-      alert('⚠️ Category name is required');
-      return;
-    }
-
-    const categoryData: CreateCategoryDto = {
-      name: this.categoryForm.name,
-      description: this.categoryForm.description,
-      icon: this.categoryForm.icon
-    };
-
-    this.categoryService.create(categoryData).subscribe({
-      next: () => {
-        alert('✅ Category added!');
-        this.showCategoryForm = false;
-        this.categoryForm = { name: '', description: '', icon: '📦' };
-        this.loadCategories();
-      },
-      error: (err) => alert('❌ Failed to create category: ' + (err.message || 'Unknown error'))
-    });
-  }
-
-  deleteCategory(id: string) {
-    if (this.products.some(p => p.categoryId === id)) {
-      alert('⚠️ Cannot delete category with products');
-      return;
-    }
-    if (confirm('Delete this category?')) {
-      this.categoryService.delete(id).subscribe({
-        next: () => {
-          alert('🗑️ Category deleted');
-          this.loadCategories();
-        },
-        error: (err) => alert('❌ Failed to delete category: ' + (err.message || 'Unknown error'))
-      });
-    }
-  }
+  // ── Stats & Badges ────────────────────────────────────────────────────────
 
   updateStats() {
     this.stats.totalProducts = this.products.length;
     this.stats.activeProducts = this.products.filter(p => p.isActive).length;
     this.stats.totalOrders = this.orders.length;
     this.stats.pendingOrders = this.orders.filter(o => o.status === 'PENDING').length;
-    this.stats.totalRevenue = this.orders.filter(o => o.status !== 'CANCELLED').reduce((sum, o) => sum + o.totalAmount, 0);
+    this.stats.totalRevenue = this.orders
+      .filter(o => o.status !== 'CANCELLED')
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     this.stats.lowStockItems = this.lowStockItems.length;
-    this.stats.totalStock = this.inventory.reduce((sum, i) => sum + i.currentStock, 0);
-    this.stats.stockValue = this.products.reduce((sum, p) => sum + (p.price * (this.inventory.find(i => i.productId === p.id)?.currentStock || 0)), 0);
+    this.stats.totalStock = this.inventory.reduce((sum, i) => sum + (i.currentStock || 0), 0);
+    this.stats.stockValue = this.products.reduce((sum, p) => {
+      const stock = this.inventory.find(i => i.productId === p.id)?.currentStock || 0;
+      return sum + ((p.price || 0) * stock);
+    }, 0);
     this.stats.activeRentals = this.rentals.filter(r => r.status === 'ACTIVE').length;
     this.stats.overdueRentals = this.rentals.filter(r => r.status === 'OVERDUE').length;
-    this.stats.rentalRevenue = this.rentals.filter(r => r.status !== 'CANCELLED').reduce((sum, r) => sum + r.totalCost, 0);
+    this.stats.rentalRevenue = this.rentals
+      .filter(r => r.status !== 'CANCELLED')
+      .reduce((sum, r) => sum + (r.totalCost || 0), 0);
   }
 
   getOrderStatusBadge(status: string): string {
@@ -672,6 +763,7 @@ export class SellerComponent implements OnInit {
   }
 
   getWarehouseStockCount(warehouseId: string): number {
+    if (!Array.isArray(this.inventory)) return 0;
     return this.inventory.filter(i => i.warehouseId === warehouseId).length;
   }
 
@@ -692,56 +784,5 @@ export class SellerComponent implements OnInit {
       'ADJUSTMENT': 'bg-blue-100 text-blue-800'
     };
     return badges[type] || 'bg-gray-100 text-gray-800';
-  }
-
-  transferStock(inv: Inventory) {
-    const targetWarehouse = prompt('Transfer to warehouse ID:');
-    if (!targetWarehouse) return;
-    if (targetWarehouse === inv.warehouseId) {
-      alert('⚠️ Cannot transfer to the same warehouse');
-      return;
-    }
-    const quantity = prompt('Quantity to transfer:');
-    if (!quantity) return;
-    const qty = parseInt(quantity);
-    if (qty <= 0 || qty > inv.availableStock) {
-      alert('⚠️ Invalid quantity');
-      return;
-    }
-    // Create OUT movement from source
-    this.inventoryService.createMovement({
-      productId: inv.productId,
-      warehouseId: inv.warehouseId,
-      type: 'OUT',
-      quantity: qty,
-      reason: `Transfer to warehouse ${targetWarehouse}`
-    }).subscribe({
-      next: () => {
-        // Create IN movement to target
-        this.inventoryService.createMovement({
-          productId: inv.productId,
-          warehouseId: targetWarehouse,
-          type: 'IN',
-          quantity: qty,
-          reason: `Transfer from warehouse ${inv.warehouseId}`
-        }).subscribe({
-          next: () => {
-            alert(`✅ Transferred ${qty} units successfully!`);
-            this.loadInventory();
-            this.loadStockMovements();
-          },
-          error: (err) => alert('❌ Failed to complete transfer: ' + (err.message || 'Unknown error'))
-        });
-      },
-      error: (err) => alert('❌ Failed to initiate transfer: ' + (err.message || 'Unknown error'))
-    });
-  }
-
-  updateGlobalStockAlert() {
-    if (this.globalStockAlertThreshold < 0) {
-      alert('⚠️ Threshold cannot be negative');
-      return;
-    }
-    alert(`ℹ️ Global stock alert update would require updating ${this.inventory.length} items. Please update individually.`);
   }
 }

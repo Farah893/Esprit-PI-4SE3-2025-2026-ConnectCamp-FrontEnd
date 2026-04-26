@@ -11,7 +11,6 @@ const unwrapOne = (res: any) => res?.data || res;
 export class CategoryService {
   // Both public and admin routes exist — use admin for write operations
   private url = `${API_BASE}/categories`;
-  private adminUrl = `${API_BASE}/admin/categories`;
 
   constructor(private http: HttpClient) {}
 
@@ -30,17 +29,17 @@ export class CategoryService {
 
   /** POST /api/admin/categories */
   create(data: { name: string; description?: string; icon?: string }): Observable<any> {
-    return this.http.post<any>(this.adminUrl, data).pipe(map(unwrapOne));
+    return this.http.post<any>(this.url , data).pipe(map(unwrapOne));
   }
 
   /** PUT /api/admin/categories/{id} */
   update(id: string, data: { name: string; description?: string; icon?: string }): Observable<any> {
-    return this.http.put<any>(`${this.adminUrl}/${id}`, data).pipe(map(unwrapOne));
+    return this.http.put<any>(`${this.url }/${id}`, data).pipe(map(unwrapOne));
   }
 
   /** DELETE /api/admin/categories/{id} */
   delete(id: string): Observable<any> {
-    return this.http.delete<any>(`${this.adminUrl}/${id}`);
+    return this.http.delete<any>(`${this.url }/${id}`);
   }
 
   /** PATCH /api/categories/{id}/product-count */

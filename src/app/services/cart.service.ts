@@ -44,6 +44,18 @@ export class CartService {
     try { localStorage.removeItem(LOCAL_CART_KEY); } catch { /* ignore */ }
   }
 
+  private getCurrentUserId(): string | null {
+    if (!this.isBrowser) return null;
+    try {
+      const userStr = localStorage.getItem('current_user') || localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user?.id?.toString() || null;
+      }
+      return null;
+    } catch { return null; }
+  }
+
   private isLoggedIn(): boolean {
     if (!this.isBrowser) return false;
     try { return !!localStorage.getItem('auth_token'); } catch { return false; }
@@ -51,15 +63,16 @@ export class CartService {
 
   // ── Cart state ────────────────────────────────────────────────────────────
 
-  getItems(): CartItem[] { return this.cartSubject.value; }
-  getItemCount(): number { return this.cartSubject.value.reduce((s, i) => s + i.quantity, 0); }
-  getSubtotal(): number { return this.cartSubject.value.reduce((s, i) => s + i.price * i.quantity, 0); }
+  getItems():     CartItem[] { return this.cartSubject.value; }
+  getItemCount(): number     { return this.cartSubject.value.reduce((s, i) => s + i.quantity, 0); }
+  getSubtotal():  number     { return this.cartSubject.value.reduce((s, i) => s + i.price * i.quantity, 0); }
 
-  // ── Core methods — all return Observable<void> so .subscribe() always works ──
+  // ── Core methods ──────────────────────────────────────────────────────────
 
-  /**
-   * addItem / addToCart — both names accepted by components.
-   */
+  getImageUrl(imagePath: string | undefined): string {
+    if (!imagePath) return 'assets/images/default.png';
+    return `${environment.apiUrl}/uploads/${imagePath}`;
+  }
   addItem(item: CartItem): Observable<void> {
     const current = [...this.cartSubject.value];
     const idx = current.findIndex(i => i.productId === item.productId && i.type === item.type);
@@ -71,8 +84,13 @@ export class CartService {
     this.cartSubject.next(current);
     this.saveLocalCart(current);
 
-    if (this.isLoggedIn()) {
-      return this.http.post<any>(`${this.apiUrl}/items`, item).pipe(
+    const userId = this.getCurrentUserId();
+    if (this.isLoggedIn() && userId) {
+      // Backend: POST /api/cart/{userId}/items?productId=X&quantity=Y
+      return this.http.post<any>(
+        `${this.apiUrl}/${userId}/items?productId=${item.productId}&quantity=${item.quantity}`,
+        {}
+      ).pipe(
         map(() => void 0),
         catchError(e => { console.warn('Cart add failed silently:', e.status); return of(void 0); })
       );
@@ -80,14 +98,10 @@ export class CartService {
     return of(void 0);
   }
 
-  /** Alias used by marketplace.component */
   addToCart(item: CartItem): Observable<void> {
     return this.addItem(item);
   }
 
-  /**
-   * removeItem / removeFromCart — both names accepted.
-   */
   removeItem(productId: string, type: 'PURCHASE' | 'RENTAL' = 'PURCHASE'): Observable<void> {
     const current = this.cartSubject.value.filter(
       i => !(i.productId === productId && i.type === type)
@@ -95,8 +109,11 @@ export class CartService {
     this.cartSubject.next(current);
     this.saveLocalCart(current);
 
-    if (this.isLoggedIn()) {
-      return this.http.delete<any>(`${this.apiUrl}/items/${productId}`).pipe(
+    const userId = this.getCurrentUserId();
+    if (this.isLoggedIn() && userId) {
+      // Backend needs itemId not productId — find item first from local state
+      // Since we already removed it locally, use productId as best effort
+      return this.http.delete<any>(`${this.apiUrl}/${userId}/items/${productId}`).pipe(
         map(() => void 0),
         catchError(e => { console.warn('Cart remove failed silently:', e.status); return of(void 0); })
       );
@@ -104,14 +121,10 @@ export class CartService {
     return of(void 0);
   }
 
-  /** Alias used by cart.component and client.component */
   removeFromCart(productId: string, type: 'PURCHASE' | 'RENTAL' = 'PURCHASE'): Observable<void> {
     return this.removeItem(productId, type);
   }
 
-  /**
-   * updateQuantity — returns Observable<void> so .subscribe() works.
-   */
   updateQuantity(
     productId: string,
     quantity: number,
@@ -124,18 +137,27 @@ export class CartService {
     );
     this.cartSubject.next(current);
     this.saveLocalCart(current);
+
+    const userId = this.getCurrentUserId();
+    if (this.isLoggedIn() && userId) {
+      return this.http.put<any>(
+        `${this.apiUrl}/${userId}/items/${productId}?quantity=${quantity}`,
+        {}
+      ).pipe(
+        map(() => void 0),
+        catchError(e => { console.warn('Cart update failed silently:', e.status); return of(void 0); })
+      );
+    }
     return of(void 0);
   }
 
-  /**
-   * clearCart — returns Observable<void> so .subscribe() works.
-   */
   clearCart(): Observable<void> {
     this.cartSubject.next([]);
     this.clearLocalCart();
 
-    if (this.isLoggedIn()) {
-      return this.http.delete<any>(`${this.apiUrl}`).pipe(
+    const userId = this.getCurrentUserId();
+    if (this.isLoggedIn() && userId) {
+      return this.http.delete<any>(`${this.apiUrl}/${userId}/clear`).pipe(
         map(() => void 0),
         catchError(e => { console.warn('Cart clear failed silently:', e.status); return of(void 0); })
       );
@@ -143,57 +165,27 @@ export class CartService {
     return of(void 0);
   }
 
-  // ── Called after login ────────────────────────────────────────────────────
-
-  syncCartAfterLogin(): void {
-    if (!this.isLoggedIn()) return;
-
-    const localItems = [...this.cartSubject.value];
-
-    this.http.get<any>(`${this.apiUrl}`).pipe(
-      catchError(e => {
-        console.warn(`Cart fetch after login failed (${e.status}) — keeping local cart`);
-        return of(null);
-      })
-    ).subscribe(response => {
-      if (response === null) return;
-
-      const serverItems: CartItem[] =
-        response?.items ??
-        response?.data?.items ??
-        [];
-
-      const merged = [...serverItems];
-      for (const local of localItems) {
-        const exists = merged.find(s => s.productId === local.productId && s.type === local.type);
-        if (!exists) merged.push(local);
-      }
-
-      this.cartSubject.next(merged);
-      this.saveLocalCart(merged);
-
-      const newItems = localItems.filter(
-        l => !serverItems.find(s => s.productId === l.productId && s.type === l.type)
-      );
-      for (const item of newItems) {
-        this.http.post(`${this.apiUrl}/items`, item).pipe(
-          catchError(e => { console.warn('Cart push failed silently:', e.status); return of(null); })
-        ).subscribe();
-      }
-
-      this.clearLocalCart();
-    });
-  }
-
   // ── Fetch for cart page ───────────────────────────────────────────────────
 
   fetchCart(): Observable<CartItem[]> {
-    if (!this.isLoggedIn()) return of(this.cartSubject.value);
+    const userId = this.getCurrentUserId();
+    if (!this.isLoggedIn() || !userId) return of(this.cartSubject.value);
 
-    return this.http.get<any>(`${this.apiUrl}`).pipe(
+    return this.http.get<any>(`${this.apiUrl}/${userId}`).pipe(
       map(response => {
-        const items: CartItem[] = response?.items ?? response?.data?.items ?? [];
+        // Backend returns ApiResponse<CartResponse> with items inside
+        const raw = response?.data || response;
+        const items: CartItem[] = (raw?.items || []).map((i: any) => ({
+          productId: String(i.productId || i.product?.id),
+          productName: i.productName || i.product?.name || '',
+          price: i.price || i.unitPrice || 0,
+          quantity: i.quantity || 1,
+          image: i.image || i.product?.thumbnail || '',
+          type: i.type || 'PURCHASE',
+          rentalDays: i.rentalDays
+        }));
         this.cartSubject.next(items);
+        this.saveLocalCart(items);
         return items;
       }),
       catchError(e => {
@@ -203,16 +195,39 @@ export class CartService {
     );
   }
 
-  // Used by Farah's modules (pack-create, pack-edit, service-list)
-  getImageUrl(imagePath: string | undefined | null): string {
-    if (!imagePath || typeof imagePath !== 'string') return '';
-    if (imagePath.startsWith('http') || imagePath.startsWith('data:') || imagePath.startsWith('blob:')) {
-      return imagePath;
-    }
-    let path = imagePath.trim().replace(/^\/+/, '');
-    if (path.startsWith('uploads/')) path = path.substring(8);
-    if (!path) return '';
-    const baseUrl = environment.apiUrl.replace('/api', '').replace(/\/$/, '');
-    return `${baseUrl}/uploads/${path}`;
+  syncCartAfterLogin(): void {
+    const userId = this.getCurrentUserId();
+    if (!this.isLoggedIn() || !userId) return;
+
+    const localItems = [...this.cartSubject.value];
+
+    this.http.get<any>(`${this.apiUrl}/${userId}`).pipe(
+      catchError(e => {
+        console.warn(`Cart fetch after login failed (${e.status}) — keeping local cart`);
+        return of(null);
+      })
+    ).subscribe(response => {
+      if (response === null) return;
+
+      const raw = response?.data || response;
+      const serverItems: CartItem[] = (raw?.items || []).map((i: any) => ({
+        productId: String(i.productId || i.product?.id),
+        productName: i.productName || i.product?.name || '',
+        price: i.price || 0,
+        quantity: i.quantity || 1,
+        image: i.image || '',
+        type: i.type || 'PURCHASE'
+      }));
+
+      const merged = [...serverItems];
+      for (const local of localItems) {
+        const exists = merged.find(s => s.productId === local.productId && s.type === local.type);
+        if (!exists) merged.push(local);
+      }
+
+      this.cartSubject.next(merged);
+      this.saveLocalCart(merged);
+      this.clearLocalCart();
+    });
   }
 }

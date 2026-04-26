@@ -70,7 +70,14 @@ export const routes: Routes = [
   { path: 'preferences', loadComponent: () => import('./components/user-preferences/user-preferences.component').then(m => m.UserPreferencesComponent), canActivate: [AuthGuard] },
 
   // --- Seller dashboard ---
-  { path: 'seller', loadComponent: () => import('./components/seller/seller.component').then(m => m.SellerComponent), canActivate: [AuthGuard], data: { role: 'SELLER' } },
+  {
+    path: 'seller',
+    loadComponent: () =>
+      import('./components/seller/seller.component')
+        .then(m => m.SellerComponent),
+    canActivate: [AuthGuard],
+    data: { roles: ['SELLER', 'ADMIN'] }
+  },
 
   // --- Sponsor dashboard ---
   { path: 'sponsor-dashboard', loadComponent: () => import('./components/sponsors/sponsors.component').then(m => m.SponsorsComponent), canActivate: [AuthGuard], data: { role: 'SPONSOR' } },
