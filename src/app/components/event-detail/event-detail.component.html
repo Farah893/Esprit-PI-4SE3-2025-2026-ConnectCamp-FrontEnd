@@ -331,6 +331,111 @@
                         </div>
                     </div>
                 </div>
+              <!-- ═══════════════════════════════════════════════
+     AI PRODUCT RECOMMENDATIONS
+════════════════════════════════════════════════ -->
+              <div class="border-t border-gray-200 pt-10">
+                <div class="flex items-center gap-3 mb-8">
+                  <div class="w-8 h-8 bg-olive/10 rounded-xl flex items-center justify-center">
+                    <span class="text-lg">🤖</span>
+                  </div>
+                  <h3 class="text-2xl font-black text-forest">AI-Recommended Products</h3>
+                  <span class="px-2 py-0.5 bg-olive/10 text-olive text-[9px] font-black uppercase tracking-widest rounded-lg border border-olive/20">
+            Powered by Aziz Ben Abdallah
+        </span>
+                </div>
+
+                <!-- Loading State -->
+                <div *ngIf="recommendationsLoading"
+                     class="flex items-center gap-3 py-8 text-olive/60 font-bold text-sm">
+                  <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  Analyzing event to find the best gear for you...
+                </div>
+
+                <!-- Error State -->
+                <div *ngIf="!recommendationsLoading && recommendationsError"
+                     class="py-6 text-sm text-red-400 font-medium italic">
+                  {{ recommendationsError }}
+                </div>
+
+                <!-- Results -->
+                <div *ngIf="!recommendationsLoading && recommendations && !recommendations.error">
+
+                  <!-- Category Badge -->
+                  <div class="inline-flex items-center gap-2 mb-6 px-4 py-2 bg-forest/5 rounded-2xl border border-forest/10">
+                    <span class="text-xs font-black text-forest uppercase tracking-widest">Best Category:</span>
+                    <span class="text-xs font-bold text-olive">{{ recommendations.bestCategory?.name }}</span>
+                  </div>
+
+                  <!-- Product Cards -->
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                    <div *ngFor="let product of recommendations.products; let i = index"
+                         class="group relative bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md hover:border-olive/20 transition-all p-5 flex flex-col gap-4">
+                      <!-- Product Image -->
+                      <div class="w-full h-36 rounded-2xl overflow-hidden bg-gray-100 -mt-1">
+                        <img
+                          [src]="getProductImage(product.productName)"
+                          [alt]="product.productName"
+                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                          (error)="$any($event.target).src='https://picsum.photos/seed/gear/400/200'"
+                        >
+                      </div>
+                      <!-- Rank Badge -->
+                      <div class="absolute -top-3 -left-3 w-8 h-8 bg-forest text-white rounded-full flex items-center justify-center text-xs font-black shadow-md">
+                        #{{ i + 1 }}
+                      </div>
+
+                      <!-- Score Bar -->
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Match Score</span>
+                        <span class="text-[10px] font-black text-olive">{{ (product.score * 100).toFixed(0) }}%</span>
+                      </div>
+                      <div class="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-olive rounded-full transition-all duration-700"
+                             [style.width.%]="product.score * 100">
+                        </div>
+                      </div>
+
+                      <!-- Product Info -->
+                      <div class="flex-1">
+                        <h4 class="font-black text-forest text-sm leading-snug mb-1">
+                          {{ product.productName }}
+                        </h4>
+                        <p class="text-2xl font-black text-forest mt-2">
+                          {{ product.price }} <span class="text-sm font-bold text-gray-400">DT</span>
+                        </p>
+                      </div>
+
+                      <!-- Why This Product -->
+                      <div class="bg-sage/5 border border-sage/10 rounded-xl px-3 py-2.5 flex items-start gap-2">
+                        <span class="text-sm mt-0.5">💡</span>
+                        <p class="text-[11px] text-forest/60 font-semibold italic leading-relaxed">
+                          {{ product.reason }}
+                        </p>
+                      </div>
+
+                      <!-- Add to Cart Button -->
+                      <button (click)="addRecommendedToCart(product)"
+                              class="w-full bg-forest text-white py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-olive transition-colors shadow-sm flex items-center justify-center gap-2 group-hover:shadow-md">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        Add to Cart
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- AI Error from backend -->
+                <div *ngIf="!recommendationsLoading && recommendations?.error"
+                     class="py-6 text-sm text-orange-400 font-medium">
+                  ⚠️ {{ recommendations?.error }}
+                </div>
+              </div>
 
                 <!-- Essential Information -->
                 <div class="border-t border-gray-200 pt-10">

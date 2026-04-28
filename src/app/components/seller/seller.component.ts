@@ -8,11 +8,16 @@ import { InventoryService } from '../../services/inventory.service';
 import { WarehouseService } from '../../services/warehouse.service';
 import { OrderService } from '../../services/order.service';
 import { RentalService } from '../../services/rental.service';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import {
   Product, Category, Inventory, StockMovement, Warehouse, Order, Rental,
   CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto
 } from '../../models/api.models';
+import { HttpClient } from '@angular/common/http';
+import { PricePredictionService, PricePrediction } from '../../services/price-prediction.service';
 
 @Component({
   selector: 'app-seller',
@@ -49,10 +54,15 @@ export class SellerComponent implements OnInit {
 
   globalStockAlertThreshold = 15;
 
+  // ✅ productForm avec tous les champs ML
   productForm: any = {
     name: '', description: '', shortDescription: '', price: 0, compareAtPrice: 0,
     sku: '', categoryId: '', tags: [], tagsInput: '', isActive: true, isFeatured: false,
-    rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30
+    isOnSale: false, rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30,
+    // Champs ML
+    brand: 'Unknown', supplierCost: 0, shippingCost: 0, weight: 0,
+    stockQuantity: 0, minStockLevel: 0, rating: 3.0,
+    reviewCount: 0, salesCount: 0, viewCount: 0, imagesCount: 1,
   };
 
   restockForm: any = { productName: '', productId: '', warehouseId: '', quantity: 0, notes: '' };
@@ -83,6 +93,11 @@ export class SellerComponent implements OnInit {
   rentals: Rental[] = [];
   categories: Category[] = [];
 
+  pricePrediction: PricePrediction | null = null;
+  priceCheckLoading = false;
+  priceWarning: 'above' | 'below' | 'ok' | null = null;
+  private priceInput$ = new Subject<number>();
+
   constructor(
     private productService: ProductService,
     private categoryService: CategoryService,
@@ -90,11 +105,87 @@ export class SellerComponent implements OnInit {
     private warehouseService: WarehouseService,
     private orderService: OrderService,
     private rentalService: RentalService,
-    private authService: AuthService
+    private authService: AuthService,
+    private predictionService: PricePredictionService,
+    private http: HttpClient
   ) {}
 
   ngOnInit() {
     this.loadAllData();
+
+    // ✅ Payload complet avec tous les champs ML
+    this.priceInput$.pipe(
+      debounceTime(800),
+      distinctUntilChanged(),
+      switchMap(price => {
+        if (!price || price <= 0) {
+          this.priceCheckLoading = false;
+          return of(null);
+        }
+
+        const categoryName = this.categories.find(
+          c => String(c.id) === String(this.productForm.categoryId)
+        )?.name || 'Outdoor Accessories';
+
+        const payload = {
+          categoryName,
+          name:              this.productForm.name             || '',
+          brand:             this.productForm.brand            || 'Unknown',
+          tags:              this.productForm.tags             || [],
+          isFeatured:        this.productForm.isFeatured       || false,
+          isOnSale:          this.productForm.isOnSale         || false,
+          isRentable:        this.productForm.rentalAvailable  || false,
+          rentalPricePerDay: this.productForm.rentalPrice      || 0,
+          // ✅ Champs critiques pour la précision
+          supplierCost:      this.productForm.supplierCost     || 0,
+          competitorPrice:   this.productForm.compareAtPrice   || 0,
+          shippingCost:      this.productForm.shippingCost     || 0,
+          weight:            this.productForm.weight           || 0,
+          stockQuantity:     this.productForm.stockQuantity    || 0,
+          minStockLevel:     this.productForm.minStockLevel    || 0,
+          rating:            this.productForm.rating           || 3.0,
+          reviewCount:       this.productForm.reviewCount      || 0,
+          salesCount:        this.productForm.salesCount       || 0,
+          viewCount:         this.productForm.viewCount        || 0,
+          imagesCount:       this.productForm.imagesCount      || 1,
+        };
+
+        return this.http.post<any>('http://localhost:8000/predict-price', payload)
+          .pipe(catchError(() => of(null)));
+      })
+    ).subscribe((res: any) => {
+      this.priceCheckLoading = false;
+      if (!res) {
+        this.pricePrediction = null;
+        this.priceWarning = null;
+        return;
+      }
+      this.pricePrediction = {
+        predictedPrice: res.predictedPrice,
+        priceMin:       res.priceRange.min,
+        priceMax:       res.priceRange.max,
+        confidence:     res.confidence
+      };
+      this.evaluatePriceWarning(this.productForm.price);
+    });
+  }
+
+  // ✅ Déclenche la vérification sur n'importe quel changement de champ
+  onPriceChange() {
+    this.pricePrediction = null;
+    this.priceWarning = null;
+    this.priceCheckLoading = true;
+    this.priceInput$.next(this.productForm.price);
+  }
+
+  // ✅ Déclenche aussi quand les champs ML changent (brand, supplierCost, etc.)
+  onFieldChange() {
+    if (this.productForm.price > 0) {
+      this.pricePrediction = null;
+      this.priceWarning = null;
+      this.priceCheckLoading = true;
+      this.priceInput$.next(this.productForm.price);
+    }
   }
 
   loadAllData() {
@@ -108,6 +199,52 @@ export class SellerComponent implements OnInit {
     this.loadStockMovements();
   }
 
+  evaluatePriceWarning(price: number) {
+    if (!this.pricePrediction) return;
+    if (price > this.pricePrediction.priceMax) {
+      this.priceWarning = 'above';
+    } else if (price < this.pricePrediction.priceMin) {
+      this.priceWarning = 'below';
+    } else {
+      this.priceWarning = 'ok';
+    }
+  }
+
+  applyAiPrice() {
+    this.productForm.price = this.pricePrediction?.predictedPrice;
+    this.priceWarning = 'ok';
+  }
+
+  saveProductWithCheck() {
+    if (this.priceCheckLoading) {
+      alert('⏳ Please wait, AI price check is still loading...');
+      return;
+    }
+    if (!this.pricePrediction) {
+      this.saveProduct();
+      return;
+    }
+    if (this.priceWarning === 'above' || this.priceWarning === 'below') {
+      const label = this.priceWarning === 'above'
+        ? `ABOVE the suggested range (max: ${this.pricePrediction.priceMax} DT)`
+        : `BELOW the suggested range (min: ${this.pricePrediction.priceMin} DT)`;
+      const confirmed = confirm(
+        `⚠️ Price Warning!\n\n` +
+        `Your price: ${this.productForm.price} DT\n` +
+        `AI suggested: ${this.pricePrediction.priceMin}–${this.pricePrediction.priceMax} DT\n\n` +
+        `Your price is ${label}.\n\nSave anyway?`
+      );
+      if (!confirmed) return;
+    }
+    this.saveProduct();
+  }
+
+  resetPriceCheck() {
+    this.pricePrediction = null;
+    this.priceWarning = null;
+    this.priceCheckLoading = false;
+  }
+
   private toArray(data: any): any[] {
     if (Array.isArray(data)) return data;
     return data?.content || data?.data?.content || data?.data || [];
@@ -118,23 +255,12 @@ export class SellerComponent implements OnInit {
   loadProducts() {
     this.isLoading = true;
     const userId = this.authService.getCurrentUser()?.id;
-
-    // /my-products doesn't exist — use getBySeller(userId) directly
     const load$ = userId
       ? this.productService.getBySeller(userId, 0, 100)
       : this.productService.getAll(0, 100);
-
     load$.subscribe({
-      next: (res: any) => {
-        this.products = this.toArray(res);
-        this.updateStats();
-        this.isLoading = false;
-      },
-      error: () => {
-        this.errorMessage = 'Failed to load products';
-        this.products = [];
-        this.isLoading = false;
-      }
+      next: (res: any) => { this.products = this.toArray(res); this.updateStats(); this.isLoading = false; },
+      error: () => { this.errorMessage = 'Failed to load products'; this.products = []; this.isLoading = false; }
     });
   }
 
@@ -147,14 +273,8 @@ export class SellerComponent implements OnInit {
 
   loadInventory() {
     this.inventoryService.getAll().subscribe({
-      next: (data: any) => {
-        this.inventory = this.toArray(data);
-        this.updateStats();
-      },
-      error: () => {
-        this.inventory = [];
-        this.errorMessage = 'Failed to load inventory';
-      }
+      next: (data: any) => { this.inventory = this.toArray(data); this.updateStats(); },
+      error: () => { this.inventory = []; this.errorMessage = 'Failed to load inventory'; }
     });
   }
 
@@ -167,45 +287,24 @@ export class SellerComponent implements OnInit {
 
   loadOrders() {
     const userId = this.authService.getCurrentUser()?.id;
-
-    // /api/orders is ADMIN only (403 for sellers)
-    // /api/orders/seller doesn't exist (500)
-    // Use /api/orders/user/{userId} which is available to all roles
     if (userId) {
       this.orderService.getByUser(userId).subscribe({
-        next: (orders: any) => {
-          this.orders = this.toArray(orders);
-          this.updateStats();
-        },
-        error: () => {
-          this.orders = [];
-          this.updateStats();
-        }
+        next: (orders: any) => { this.orders = this.toArray(orders); this.updateStats(); },
+        error: () => { this.orders = []; this.updateStats(); }
       });
     } else {
-      this.orders = [];
-      this.updateStats();
+      this.orders = []; this.updateStats();
     }
   }
 
   loadRentals() {
-    // /api/rentals/seller-rentals doesn't exist on backend — use getAll()
     this.rentalService.getAll().subscribe({
-      next: (data: any) => {
-        this.rentals = this.toArray(data);
-        this.updateStats();
-      },
-      error: () => {
-        this.rentals = [];
-        this.updateStats();
-      }
+      next: (data: any) => { this.rentals = this.toArray(data); this.updateStats(); },
+      error: () => { this.rentals = []; this.updateStats(); }
     });
   }
 
-  loadStockMovements() {
-    // /api/inventory/movements doesn't exist — skip gracefully
-    this.stockMovements = [];
-  }
+  loadStockMovements() { this.stockMovements = []; }
 
   // ── Filtered getters ──────────────────────────────────────────────────────
 
@@ -227,25 +326,19 @@ export class SellerComponent implements OnInit {
 
   get filteredInventory(): Inventory[] {
     let filtered = [...this.inventory];
-    if (this.stockFilterWarehouse) {
-      filtered = filtered.filter(i => i.warehouseId === this.stockFilterWarehouse);
-    }
+    if (this.stockFilterWarehouse) filtered = filtered.filter(i => i.warehouseId === this.stockFilterWarehouse);
     return filtered;
   }
 
   get filteredOrders(): Order[] {
     let filtered = [...this.orders];
-    if (this.orderStatusFilter) {
-      filtered = filtered.filter(o => o.status === this.orderStatusFilter);
-    }
+    if (this.orderStatusFilter) filtered = filtered.filter(o => o.status === this.orderStatusFilter);
     return filtered;
   }
 
   get filteredRentals(): Rental[] {
     let filtered = [...this.rentals];
-    if (this.rentalStatusFilter) {
-      filtered = filtered.filter(r => r.status === this.rentalStatusFilter);
-    }
+    if (this.rentalStatusFilter) filtered = filtered.filter(r => r.status === this.rentalStatusFilter);
     return filtered;
   }
 
@@ -267,12 +360,18 @@ export class SellerComponent implements OnInit {
     this.resetProductForm();
   }
 
+  // ✅ resetProductForm avec tous les champs ML
   resetProductForm() {
     this.productForm = {
       name: '', description: '', shortDescription: '', price: 0, compareAtPrice: 0,
       sku: '', categoryId: '', tags: [], tagsInput: '', isActive: true, isFeatured: false,
-      rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30
+      isOnSale: false, rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30,
+      // Champs ML
+      brand: 'Unknown', supplierCost: 0, shippingCost: 0, weight: 0,
+      stockQuantity: 0, minStockLevel: 0, rating: 3.0,
+      reviewCount: 0, salesCount: 0, viewCount: 0, imagesCount: 1,
     };
+    this.resetPriceCheck();
   }
 
   saveProduct() {
@@ -282,59 +381,38 @@ export class SellerComponent implements OnInit {
     if (!this.productForm.sku) {
       this.productForm.sku = `PRD-${Date.now().toString().slice(-6)}`;
     }
-
     const sellerId = Number(this.authService.getCurrentUser()?.id ?? 0);
-
     const productData = {
-      name: this.productForm.name,
-      description: this.productForm.description,
-      price: this.productForm.price,
-      originalPrice: this.productForm.compareAtPrice || undefined,
-      sku: this.productForm.sku,
-      categoryId: this.productForm.categoryId ? Number(this.productForm.categoryId) : undefined,
-      sellerId: sellerId,
-      tags: this.productForm.tags,
-      images: [] as string[],
-      isFeatured: this.productForm.isFeatured,
-      isRentable: this.productForm.rentalAvailable,
+      name:              this.productForm.name,
+      description:       this.productForm.description,
+      price:             this.productForm.price,
+      originalPrice:     this.productForm.compareAtPrice || undefined,
+      sku:               this.productForm.sku,
+      categoryId:        this.productForm.categoryId ? Number(this.productForm.categoryId) : undefined,
+      sellerId,
+      tags:              this.productForm.tags,
+      images:            [] as string[],
+      isFeatured:        this.productForm.isFeatured,
+      isRentable:        this.productForm.rentalAvailable,
       rentalPricePerDay: this.productForm.rentalPrice || undefined,
-      stockQuantity: 0
+      stockQuantity:     0
     };
-
     this.isLoading = true;
-
     if (this.editingProductId) {
       this.productService.update(this.editingProductId, productData).subscribe({
-        next: () => {
-          alert('✅ Product updated successfully!');
-          this.cancelProductForm();
-          this.loadProducts();
-        },
-        error: (err) => {
-          this.isLoading = false;
-          alert('❌ Failed to update product: ' + (err.error?.message || err.message || 'Unknown error'));
-        }
+        next: () => { alert('✅ Product updated successfully!'); this.cancelProductForm(); this.loadProducts(); this.resetPriceCheck(); },
+        error: (err) => { this.isLoading = false; alert('❌ Failed to update product: ' + (err.error?.message || err.message || 'Unknown error')); }
       });
     } else {
       this.productService.create(productData).subscribe({
-        next: () => {
-          alert('✅ Product added successfully!');
-          this.cancelProductForm();
-          this.loadProducts();
-        },
-        error: (err) => {
-          this.isLoading = false;
-          alert('❌ Failed to create product: ' + (err.error?.message || err.message || 'Unknown error'));
-        }
+        next: () => { alert('✅ Product added successfully!'); this.cancelProductForm(); this.loadProducts(); },
+        error: (err) => { this.isLoading = false; alert('❌ Failed to create product: ' + (err.error?.message || err.message || 'Unknown error')); }
       });
     }
   }
 
   editProduct(product: Product) {
-    this.productForm = {
-      ...product,
-      tagsInput: product.tags?.join(', ') || ''
-    };
+    this.productForm = { ...product, tagsInput: product.tags?.join(', ') || '' };
     this.editingProductId = product.id;
     this.showProductForm = true;
   }
@@ -342,10 +420,7 @@ export class SellerComponent implements OnInit {
   deleteProduct(id: string) {
     if (confirm('Delete this product?')) {
       this.productService.delete(id).subscribe({
-        next: () => {
-          alert('🗑️ Product deleted');
-          this.loadProducts();
-        },
+        next: () => { alert('🗑️ Product deleted'); this.loadProducts(); },
         error: (err) => alert('❌ Failed to delete: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -353,10 +428,7 @@ export class SellerComponent implements OnInit {
 
   toggleProductStatus(product: Product) {
     this.productService.update(product.id, { isActive: !product.isActive } as any).subscribe({
-      next: () => {
-        product.isActive = !product.isActive;
-        alert(`Product ${product.isActive ? 'activated' : 'deactivated'}`);
-      },
+      next: () => { product.isActive = !product.isActive; alert(`Product ${product.isActive ? 'activated' : 'deactivated'}`); },
       error: () => alert('❌ Failed to update product status')
     });
   }
@@ -370,142 +442,68 @@ export class SellerComponent implements OnInit {
   // ── Inventory / Stock ─────────────────────────────────────────────────────
 
   openRestockForm(inv: Inventory) {
-    this.restockForm = {
-      productName: inv.productName,
-      productId: inv.productId,
-      warehouseId: inv.warehouseId,
-      quantity: 0,
-      notes: ''
-    };
+    this.restockForm = { productName: inv.productName, productId: inv.productId, warehouseId: inv.warehouseId, quantity: 0, notes: '' };
     this.showRestockForm = true;
   }
 
   saveRestock() {
-    if (this.restockForm.quantity <= 0) {
-      alert('⚠️ Quantity must be greater than 0');
-      return;
-    }
-
+    if (this.restockForm.quantity <= 0) { alert('⚠️ Quantity must be greater than 0'); return; }
     const movementData: CreateStockMovementDto = {
-      productId: this.restockForm.productId,
-      warehouseId: this.restockForm.warehouseId,
-      type: 'IN',
-      quantity: this.restockForm.quantity,
-      reason: this.restockForm.notes || 'Manual restock'
+      productId: this.restockForm.productId, warehouseId: this.restockForm.warehouseId,
+      type: 'IN', quantity: this.restockForm.quantity, reason: this.restockForm.notes || 'Manual restock'
     };
-
     this.inventoryService.createMovement(movementData).subscribe({
-      next: () => {
-        alert(`✅ Restocked ${this.restockForm.quantity} units successfully!`);
-        this.showRestockForm = false;
-        this.loadInventory();
-      },
+      next: () => { alert(`✅ Restocked ${this.restockForm.quantity} units successfully!`); this.showRestockForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to restock: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
   openStockMovementForm() {
-    this.stockMovementForm = {
-      productId: '',
-      type: 'IN',
-      quantity: 0,
-      reason: '',
-      locationCode: '',
-      warehouseId: this.warehouses[0]?.id || ''
-    };
+    this.stockMovementForm = { productId: '', type: 'IN', quantity: 0, reason: '', locationCode: '', warehouseId: this.warehouses[0]?.id || '' };
     this.showStockMovementForm = true;
   }
 
   saveStockMovement() {
-    if (!this.stockMovementForm.productId || this.stockMovementForm.quantity === 0) {
-      alert('⚠️ Please fill all required fields');
-      return;
-    }
-
+    if (!this.stockMovementForm.productId || this.stockMovementForm.quantity === 0) { alert('⚠️ Please fill all required fields'); return; }
     const movementData: CreateStockMovementDto = {
-      productId: this.stockMovementForm.productId,
-      warehouseId: this.stockMovementForm.warehouseId,
-      type: this.stockMovementForm.type,
-      quantity: Math.abs(this.stockMovementForm.quantity),
-      reason: this.stockMovementForm.reason,
-      locationCode: this.stockMovementForm.locationCode
+      productId: this.stockMovementForm.productId, warehouseId: this.stockMovementForm.warehouseId,
+      type: this.stockMovementForm.type, quantity: Math.abs(this.stockMovementForm.quantity),
+      reason: this.stockMovementForm.reason, locationCode: this.stockMovementForm.locationCode
     };
-
     this.inventoryService.createMovement(movementData).subscribe({
-      next: () => {
-        alert('✅ Stock movement recorded!');
-        this.showStockMovementForm = false;
-        this.loadInventory();
-      },
+      next: () => { alert('✅ Stock movement recorded!'); this.showStockMovementForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to record: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
   openStockAlertForm(inv: Inventory) {
-    this.stockAlertForm = {
-      inventoryId: inv.id,
-      productName: inv.productName,
-      currentThreshold: inv.lowStockThreshold,
-      newThreshold: inv.lowStockThreshold
-    };
+    this.stockAlertForm = { inventoryId: inv.id, productName: inv.productName, currentThreshold: inv.lowStockThreshold, newThreshold: inv.lowStockThreshold };
     this.editingInventoryId = inv.id;
     this.showStockAlertForm = true;
   }
 
   saveStockAlert() {
-    if (this.stockAlertForm.newThreshold < 0) {
-      alert('⚠️ Threshold cannot be negative');
-      return;
-    }
-
+    if (this.stockAlertForm.newThreshold < 0) { alert('⚠️ Threshold cannot be negative'); return; }
     const currentItem = this.inventory.find(i => i.id === this.editingInventoryId);
     this.inventoryService.updateStock(this.editingInventoryId!, {
-      currentStock: currentItem?.currentStock || 0,
-      lowStockThreshold: this.stockAlertForm.newThreshold
+      currentStock: currentItem?.currentStock || 0, lowStockThreshold: this.stockAlertForm.newThreshold
     }).subscribe({
-      next: () => {
-        alert(`✅ Threshold updated to ${this.stockAlertForm.newThreshold} units`);
-        this.showStockAlertForm = false;
-        this.loadInventory();
-      },
+      next: () => { alert(`✅ Threshold updated to ${this.stockAlertForm.newThreshold} units`); this.showStockAlertForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to update: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
   transferStock(inv: Inventory) {
     const targetWarehouse = prompt('Transfer to warehouse ID:');
-    if (!targetWarehouse) return;
-    if (targetWarehouse === inv.warehouseId) {
-      alert('⚠️ Cannot transfer to the same warehouse');
-      return;
-    }
+    if (!targetWarehouse || targetWarehouse === inv.warehouseId) { alert('⚠️ Cannot transfer to the same warehouse'); return; }
     const quantity = prompt('Quantity to transfer:');
     if (!quantity) return;
     const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty <= 0 || qty > inv.availableStock) {
-      alert('⚠️ Invalid quantity');
-      return;
-    }
-
-    this.inventoryService.createMovement({
-      productId: inv.productId,
-      warehouseId: inv.warehouseId,
-      type: 'OUT',
-      quantity: qty,
-      reason: `Transfer to warehouse ${targetWarehouse}`
-    }).subscribe({
+    if (isNaN(qty) || qty <= 0 || qty > inv.availableStock) { alert('⚠️ Invalid quantity'); return; }
+    this.inventoryService.createMovement({ productId: inv.productId, warehouseId: inv.warehouseId, type: 'OUT', quantity: qty, reason: `Transfer to warehouse ${targetWarehouse}` }).subscribe({
       next: () => {
-        this.inventoryService.createMovement({
-          productId: inv.productId,
-          warehouseId: targetWarehouse,
-          type: 'IN',
-          quantity: qty,
-          reason: `Transfer from warehouse ${inv.warehouseId}`
-        }).subscribe({
-          next: () => {
-            alert(`✅ Transferred ${qty} units successfully!`);
-            this.loadInventory();
-          },
+        this.inventoryService.createMovement({ productId: inv.productId, warehouseId: targetWarehouse, type: 'IN', quantity: qty, reason: `Transfer from warehouse ${inv.warehouseId}` }).subscribe({
+          next: () => { alert(`✅ Transferred ${qty} units successfully!`); this.loadInventory(); },
           error: (err) => alert('❌ Transfer failed: ' + (err.error?.message || err.message || 'Unknown error'))
         });
       },
@@ -514,10 +512,7 @@ export class SellerComponent implements OnInit {
   }
 
   updateGlobalStockAlert() {
-    if (this.globalStockAlertThreshold < 0) {
-      alert('⚠️ Threshold cannot be negative');
-      return;
-    }
+    if (this.globalStockAlertThreshold < 0) { alert('⚠️ Threshold cannot be negative'); return; }
     alert(`ℹ️ Global stock alert: ${this.inventory.length} items. Please update individually.`);
   }
 
@@ -536,46 +531,24 @@ export class SellerComponent implements OnInit {
 
   getFilteredProductsByCategory(): Product[] {
     let filtered = this.filteredProducts;
-    if (this.selectedCategoryId) {
-      filtered = filtered.filter(p => p.categoryId === this.selectedCategoryId);
-    }
+    if (this.selectedCategoryId) filtered = filtered.filter(p => p.categoryId === this.selectedCategoryId);
     return filtered;
   }
 
   saveCategory() {
-    if (!this.categoryForm.name) {
-      alert('⚠️ Category name is required');
-      return;
-    }
-
-    const categoryData: CreateCategoryDto = {
-      name: this.categoryForm.name,
-      description: this.categoryForm.description,
-      icon: this.categoryForm.icon
-    };
-
+    if (!this.categoryForm.name) { alert('⚠️ Category name is required'); return; }
+    const categoryData: CreateCategoryDto = { name: this.categoryForm.name, description: this.categoryForm.description, icon: this.categoryForm.icon };
     this.categoryService.create(categoryData).subscribe({
-      next: () => {
-        alert('✅ Category added!');
-        this.showCategoryForm = false;
-        this.categoryForm = { name: '', description: '', icon: '📦' };
-        this.loadCategories();
-      },
+      next: () => { alert('✅ Category added!'); this.showCategoryForm = false; this.categoryForm = { name: '', description: '', icon: '📦' }; this.loadCategories(); },
       error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
   deleteCategory(id: string) {
-    if (this.products.some(p => p.categoryId === id)) {
-      alert('⚠️ Cannot delete category with products');
-      return;
-    }
+    if (this.products.some(p => p.categoryId === id)) { alert('⚠️ Cannot delete category with products'); return; }
     if (confirm('Delete this category?')) {
       this.categoryService.delete(id).subscribe({
-        next: () => {
-          alert('🗑️ Category deleted');
-          this.loadCategories();
-        },
+        next: () => { alert('🗑️ Category deleted'); this.loadCategories(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -585,11 +558,7 @@ export class SellerComponent implements OnInit {
 
   updateOrderStatus(order: Order, newStatus: string) {
     this.orderService.updateStatus(order.id, newStatus).subscribe({
-      next: (updatedOrder) => {
-        Object.assign(order, updatedOrder);
-        alert(`✅ Order #${order.id} updated to ${newStatus}`);
-        this.loadOrders();
-      },
+      next: (updatedOrder) => { Object.assign(order, updatedOrder); alert(`✅ Order #${order.id} updated to ${newStatus}`); this.loadOrders(); },
       error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
@@ -601,10 +570,7 @@ export class SellerComponent implements OnInit {
   cancelOrder(order: Order) {
     if (confirm(`Cancel order #${order.id}?`)) {
       this.orderService.cancel(order.id).subscribe({
-        next: () => {
-          alert(`✅ Order #${order.id} cancelled`);
-          this.loadOrders();
-        },
+        next: () => { alert(`✅ Order #${order.id} cancelled`); this.loadOrders(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -619,10 +585,7 @@ export class SellerComponent implements OnInit {
   markRentalReturned(rental: Rental) {
     if (confirm(`Mark rental ${rental.id} as returned?`)) {
       this.rentalService.markReturned(rental.id).subscribe({
-        next: () => {
-          alert(`✅ Rental ${rental.id} marked as returned.`);
-          this.loadRentals();
-        },
+        next: () => { alert(`✅ Rental ${rental.id} marked as returned.`); this.loadRentals(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -640,13 +603,8 @@ export class SellerComponent implements OnInit {
     if (!days) return;
     const extension = parseInt(days, 10);
     if (isNaN(extension) || extension <= 0) return;
-
     this.rentalService.extend(rental.id, { additionalDays: extension }).subscribe({
-      next: (updatedRental) => {
-        Object.assign(rental, updatedRental);
-        alert(`✅ Rental extended by ${extension} days.`);
-        this.loadRentals();
-      },
+      next: (updatedRental) => { Object.assign(rental, updatedRental); alert(`✅ Rental extended by ${extension} days.`); this.loadRentals(); },
       error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
@@ -654,49 +612,26 @@ export class SellerComponent implements OnInit {
   // ── Warehouses ────────────────────────────────────────────────────────────
 
   openWarehouseForm(warehouse?: Warehouse) {
-    if (warehouse) {
-      this.warehouseForm = { ...warehouse };
-      this.editingWarehouseId = warehouse.id;
-    } else {
-      this.warehouseForm = { name: '', code: '', address: '', city: '', country: '', phone: '', email: '', isActive: true };
-      this.editingWarehouseId = null;
-    }
+    if (warehouse) { this.warehouseForm = { ...warehouse }; this.editingWarehouseId = warehouse.id; }
+    else { this.warehouseForm = { name: '', code: '', address: '', city: '', country: '', phone: '', email: '', isActive: true }; this.editingWarehouseId = null; }
     this.showWarehouseForm = true;
   }
 
   saveWarehouse() {
-    if (!this.warehouseForm.name || !this.warehouseForm.code) {
-      alert('⚠️ Name and code are required');
-      return;
-    }
-
+    if (!this.warehouseForm.name || !this.warehouseForm.code) { alert('⚠️ Name and code are required'); return; }
     const warehouseData: CreateWarehouseDto = {
-      name: this.warehouseForm.name,
-      code: this.warehouseForm.code,
-      address: this.warehouseForm.address,
-      city: this.warehouseForm.city,
-      country: this.warehouseForm.country,
-      phone: this.warehouseForm.phone,
-      email: this.warehouseForm.email,
-      isActive: this.warehouseForm.isActive
+      name: this.warehouseForm.name, code: this.warehouseForm.code, address: this.warehouseForm.address,
+      city: this.warehouseForm.city, country: this.warehouseForm.country, phone: this.warehouseForm.phone,
+      email: this.warehouseForm.email, isActive: this.warehouseForm.isActive
     };
-
     if (this.editingWarehouseId) {
       this.warehouseService.update(this.editingWarehouseId, warehouseData).subscribe({
-        next: () => {
-          alert('✅ Warehouse updated!');
-          this.showWarehouseForm = false;
-          this.loadWarehouses();
-        },
+        next: () => { alert('✅ Warehouse updated!'); this.showWarehouseForm = false; this.loadWarehouses(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     } else {
       this.warehouseService.create(warehouseData).subscribe({
-        next: () => {
-          alert('✅ Warehouse added!');
-          this.showWarehouseForm = false;
-          this.loadWarehouses();
-        },
+        next: () => { alert('✅ Warehouse added!'); this.showWarehouseForm = false; this.loadWarehouses(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -704,25 +639,16 @@ export class SellerComponent implements OnInit {
 
   toggleWarehouseStatus(warehouse: Warehouse) {
     this.warehouseService.update(warehouse.id, { isActive: !warehouse.isActive } as any).subscribe({
-      next: () => {
-        warehouse.isActive = !warehouse.isActive;
-        alert(`Warehouse ${warehouse.isActive ? 'activated' : 'deactivated'}`);
-      },
+      next: () => { warehouse.isActive = !warehouse.isActive; alert(`Warehouse ${warehouse.isActive ? 'activated' : 'deactivated'}`); },
       error: () => alert('❌ Failed to update warehouse status')
     });
   }
 
   deleteWarehouse(id: string) {
-    if (this.inventory.some(i => i.warehouseId === id)) {
-      alert('⚠️ Cannot delete warehouse with existing stock.');
-      return;
-    }
+    if (this.inventory.some(i => i.warehouseId === id)) { alert('⚠️ Cannot delete warehouse with existing stock.'); return; }
     if (confirm('Delete this warehouse?')) {
       this.warehouseService.delete(id).subscribe({
-        next: () => {
-          alert('🗑️ Warehouse deleted');
-          this.loadWarehouses();
-        },
+        next: () => { alert('🗑️ Warehouse deleted'); this.loadWarehouses(); },
         error: (err) => alert('❌ Failed: ' + (err.error?.message || err.message || 'Unknown error'))
       });
     }
@@ -731,32 +657,26 @@ export class SellerComponent implements OnInit {
   // ── Stats & Badges ────────────────────────────────────────────────────────
 
   updateStats() {
-    this.stats.totalProducts = this.products.length;
+    this.stats.totalProducts  = this.products.length;
     this.stats.activeProducts = this.products.filter(p => p.isActive).length;
-    this.stats.totalOrders = this.orders.length;
-    this.stats.pendingOrders = this.orders.filter(o => o.status === 'PENDING').length;
-    this.stats.totalRevenue = this.orders
-      .filter(o => o.status !== 'CANCELLED')
-      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    this.stats.lowStockItems = this.lowStockItems.length;
-    this.stats.totalStock = this.inventory.reduce((sum, i) => sum + (i.currentStock || 0), 0);
-    this.stats.stockValue = this.products.reduce((sum, p) => {
+    this.stats.totalOrders    = this.orders.length;
+    this.stats.pendingOrders  = this.orders.filter(o => o.status === 'PENDING').length;
+    this.stats.totalRevenue   = this.orders.filter(o => o.status !== 'CANCELLED').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    this.stats.lowStockItems  = this.lowStockItems.length;
+    this.stats.totalStock     = this.inventory.reduce((sum, i) => sum + (i.currentStock || 0), 0);
+    this.stats.stockValue     = this.products.reduce((sum, p) => {
       const stock = this.inventory.find(i => i.productId === p.id)?.currentStock || 0;
       return sum + ((p.price || 0) * stock);
     }, 0);
-    this.stats.activeRentals = this.rentals.filter(r => r.status === 'ACTIVE').length;
+    this.stats.activeRentals  = this.rentals.filter(r => r.status === 'ACTIVE').length;
     this.stats.overdueRentals = this.rentals.filter(r => r.status === 'OVERDUE').length;
-    this.stats.rentalRevenue = this.rentals
-      .filter(r => r.status !== 'CANCELLED')
-      .reduce((sum, r) => sum + (r.totalCost || 0), 0);
+    this.stats.rentalRevenue  = this.rentals.filter(r => r.status !== 'CANCELLED').reduce((sum, r) => sum + (r.totalCost || 0), 0);
   }
 
   getOrderStatusBadge(status: string): string {
     const badges: { [key: string]: string } = {
-      'PENDING': 'bg-yellow-100 text-yellow-800',
-      'PROCESSING': 'bg-blue-100 text-blue-800',
-      'SHIPPED': 'bg-purple-100 text-purple-800',
-      'DELIVERED': 'bg-green-100 text-green-800',
+      'PENDING': 'bg-yellow-100 text-yellow-800', 'PROCESSING': 'bg-blue-100 text-blue-800',
+      'SHIPPED': 'bg-purple-100 text-purple-800', 'DELIVERED': 'bg-green-100 text-green-800',
       'CANCELLED': 'bg-red-100 text-red-800'
     };
     return badges[status] || 'bg-gray-100 text-gray-800';
@@ -769,18 +689,15 @@ export class SellerComponent implements OnInit {
 
   getRentalStatusBadge(status: string): string {
     const badges: { [key: string]: string } = {
-      'ACTIVE': 'bg-green-100 text-green-800',
-      'OVERDUE': 'bg-red-100 text-red-800',
-      'COMPLETED': 'bg-blue-100 text-blue-800',
-      'CANCELLED': 'bg-gray-100 text-gray-800'
+      'ACTIVE': 'bg-green-100 text-green-800', 'OVERDUE': 'bg-red-100 text-red-800',
+      'COMPLETED': 'bg-blue-100 text-blue-800', 'CANCELLED': 'bg-gray-100 text-gray-800'
     };
     return badges[status] || 'bg-gray-100 text-gray-800';
   }
 
   getMovementTypeBadge(type: string): string {
     const badges: { [key: string]: string } = {
-      'IN': 'bg-green-100 text-green-800',
-      'OUT': 'bg-red-100 text-red-800',
+      'IN': 'bg-green-100 text-green-800', 'OUT': 'bg-red-100 text-red-800',
       'ADJUSTMENT': 'bg-blue-100 text-blue-800'
     };
     return badges[type] || 'bg-gray-100 text-gray-800';

@@ -6,8 +6,13 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 import { EventServiceEntity } from '../../models/event-service-entity.model';
+import { RecommendationService, RecommendationResult } from '../../services/recommendation.service';
 
+import { CartService } from '../../services/cart.service';
+import { CartItem } from '../../models/api.models';
 export interface Event {
+
+
     id: number;
     title: string;
     type: 'workshop' | 'trip' | 'festival';
@@ -46,7 +51,11 @@ export class EventDetailComponent {
 
     requestedServices: EventServiceEntity[] = [];
     servicesLoading = false;
-
+  recommendations: RecommendationResult | null = null;
+  recommendationsLoading = false;
+  recommendationsError = '';
+  private recommendationService = inject(RecommendationService);
+  private cartService = inject(CartService);
     newComment: string = '';
     newCommentRating: number = 0;
     userRating: number = 0;
@@ -91,6 +100,8 @@ export class EventDetailComponent {
             this.loadComments();
             this.loadUserReaction();
             this.loadRequestedServices();
+            this.loadRecommendations();
+
         }
     }
     get event(): Event | null { return this._event; }
@@ -120,7 +131,12 @@ export class EventDetailComponent {
     get isOrganizer(): boolean {
         return this.authService.getCurrentUser()?.role === 'ORGANIZER';
     }
-
+  getProductImage(productName: string): string {
+    const keywords = ['outdoor', 'sport', 'gear', 'adventure', 'equipment', 'hiking', 'nature'];
+    const keyword = keywords[Math.floor(Math.random() * keywords.length)];
+    const seed = productName.replace(/\s+/g, '-').toLowerCase();
+    return `https://picsum.photos/seed/${seed}/400/200`;
+  }
     // Readonly rating derived from backend (likes/dislikes → rating field)
     get displayRating(): number {
         if (!this.event || this.event.rating == null) {
@@ -459,4 +475,37 @@ export class EventDetailComponent {
             error: (err) => console.error('Refresh failed', err)
         });
     }
+
+  loadRecommendations() {
+    if (!this._event) return;
+    this.recommendationsLoading = true;
+    this.recommendationsError = '';
+    this.recommendations = null;
+
+    this.recommendationService.getRecommendations(this._event.id).subscribe({
+      next: (res) => {
+        this.recommendations = res;
+        this.recommendationsLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.recommendationsError = 'Could not load recommendations.';
+        this.recommendationsLoading = false;
+      }
+    });
+  }
+
+  addRecommendedToCart(product: any) {
+    const item: CartItem = {
+      productId: String(product.productId),
+      productName: product.productName,
+      price: product.price,
+      quantity: 1,
+      image: '',
+      type: 'PURCHASE'
+    };
+    this.cartService.addToCart(item).subscribe();
+    // Toast feedback
+    alert(`✅ "${product.productName}" added to cart!`);
+  }
 }
