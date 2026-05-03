@@ -7,58 +7,6 @@
                 <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
-<<<<<<< HEAD
-            </button>
-            <h1 class="text-2xl font-black text-forest flex items-center gap-3">
-                <svg class="w-8 h-8 text-forest/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Shopping Cart
-            </h1>
-        </div>
-
-        <!-- Cart Items -->
-        <div class="space-y-4 mb-8">
-            <div *ngFor="let item of cartItems"
-                class="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:shadow-md transition-shadow">
-                <!-- Image -->
-                <div class="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-100">
-                    <img [src]="item.image" [alt]="item.name" class="w-full h-full object-cover">
-                </div>
-
-                <!-- Info -->
-                <div class="flex-1">
-                    <h3 class="font-bold text-gray-900 text-sm mb-1">{{ item.name }}</h3>
-                    <div class="flex items-center gap-2 text-xs text-gray-500 mb-3">
-                        <span *ngIf="item.type === 'Purchase'">📄 Purchase</span>
-                        <span *ngIf="item.type === 'Rental'">🗓️ Rental: {{ item.rentalDuration }}</span>
-                    </div>
-
-                    <div class="flex items-center gap-6">
-                        <!-- Quantity -->
-                        <div class="flex items-center gap-3 bg-gray-50 rounded-lg p-1">
-                            <button (click)="decrementQuantity(item)"
-                                class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-forest transition-colors rounded hover:bg-white font-bold">-</button>
-                            <span class="text-sm font-bold w-4 text-center">{{ item.quantity }}</span>
-                            <button (click)="incrementQuantity(item)"
-                                class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-forest transition-colors rounded hover:bg-white font-bold">+</button>
-                        </div>
-
-                        <!-- Price -->
-                        <div class="font-black text-forest">
-                            {{ getLineTotal(item) | number:'1.2-2'  }} DT
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Delete -->
-                <button (click)="removeItem(item)" class="text-gray-300 hover:text-red-500 transition-colors">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-=======
             </div>
             <h2 class="text-3xl font-black text-forest mb-2">Order Confirmed!</h2>
             <p class="text-gray-400 font-medium mb-1">Your order has been placed successfully.</p>
@@ -66,7 +14,6 @@
             <div class="flex gap-4 justify-center">
                 <button (click)="goBack()" class="px-8 py-3 bg-forest text-white rounded-xl font-bold hover:bg-black transition-colors">
                     Continue Shopping
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
                 </button>
             </div>
         </div>

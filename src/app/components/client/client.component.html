@@ -124,9 +124,6 @@
               <div>
                 <h4 class="font-bold text-lg text-forest-green">Order #{{ order.id }}</h4>
                 <div class="text-sm text-olive-green">Placed on {{ formatDate(order.createdAt) }}</div>
-                <div *ngIf="order.trackingNumber" class="text-sm text-olive-green mt-1">
-                  📍 Tracking: {{ order.trackingNumber }}
-                </div>
               </div>
               <div class="text-right mt-2 md:mt-0">
                 <div class="font-bold text-xl text-forest-green">
@@ -161,27 +158,19 @@
 
             <!-- Actions -->
             <div class="flex flex-wrap gap-3">
-
-              <!-- Track Package → opens the tracking modal -->
               <button *ngIf="order.status === 'SHIPPED' || order.status === 'DELIVERED'"
                       (click)="trackOrder(order)"
                       class="flex items-center gap-2 px-4 py-2 bg-forest-green text-cream-beige rounded-md text-sm hover:bg-olive-green transition-colors">
                 📍 Track Package
               </button>
-
-              <!-- Leave Review (delivered) -->
               <button *ngIf="order.status === 'DELIVERED'"
                       class="flex items-center gap-2 px-4 py-2 bg-forest-green text-cream-beige rounded-md text-sm hover:bg-olive-green transition-colors">
                 ⭐ Leave Review
               </button>
-
-              <!-- Cancel Order (pending) -->
               <button *ngIf="order.status === 'PENDING'" (click)="cancelOrder(order)"
                       class="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 transition-colors">
                 ❌ Cancel Order
               </button>
-
-              <!-- Download Invoice — real PDF from backend -->
               <button (click)="downloadInvoice(order)"
                       [disabled]="downloadingInvoiceId === order.id"
                       class="flex items-center gap-2 px-4 py-2 border border-sage-green/40 text-olive-green rounded-md text-sm hover:bg-sage-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -194,14 +183,9 @@
                   Generating…
                 </span>
               </button>
-
             </div>
-            <!-- /actions -->
-
           </div>
-          <!-- /ngFor order -->
         </div>
-        <!-- /space-y-6 -->
 
         <!-- Empty state -->
         <div *ngIf="filteredOrders.length === 0" class="text-center py-12">
@@ -212,7 +196,6 @@
             Start Shopping
           </a>
         </div>
-
       </div>
       <!-- /orders -->
 
@@ -252,30 +235,9 @@
             </div>
           </div>
 
-<<<<<<< HEAD
-          <!-- Country selector -->
-          <div class="flex items-center gap-3 mb-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
-            <span class="text-sm text-gray-600 font-medium">🌍 Livraison vers :</span>
-            <app-country-selector (countryChange)="onCountryChange($event)"></app-country-selector>
-          </div>
-
-          <!-- Dynamic cart summary -->
-          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3 mb-6">
-            <h3 class="text-base font-semibold text-gray-800 pb-2 border-b border-gray-100">
-              Résumé de la commande
-            </h3>
-
-            <div *ngIf="isCalculatingPrices" class="flex items-center gap-2 text-sm text-gray-400 py-1">
-              <svg class="animate-spin w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              Calcul des prix en cours…
-=======
           <!-- Promo Code -->
           <div class="bg-white border border-sage-green/30 rounded-lg p-4 mb-4">
             <h4 class="font-semibold text-forest-green mb-3">🏷️ Code Promo</h4>
-
             <div *ngIf="!promoResult?.valide" class="flex gap-2">
               <input [(ngModel)]="promoCode" name="promoCode" (keyup.enter)="applyPromo()"
                 type="text" placeholder="ex: SUMMER20"
@@ -286,12 +248,10 @@
                 {{ promoLoading ? '...' : 'Appliquer' }}
               </button>
             </div>
-
             <p *ngIf="promoResult && !promoResult.valide"
               class="mt-2 text-xs text-red-500 font-bold flex items-center gap-1">
               ❌ {{ promoResult.message }}
             </p>
-
             <div *ngIf="promoResult?.valide"
               class="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               <div>
@@ -302,152 +262,37 @@
             </div>
           </div>
 
-          <!-- Cart Summary -->
+          <!-- Summary -->
           <div class="bg-sage-green/10 rounded-lg p-6 mb-6">
             <div class="space-y-3">
               <div class="flex justify-between"><span class="text-olive-green">Subtotal:</span><span class="font-bold text-forest-green">{{ cartSubtotal.toFixed(2) }} DT</span></div>
-              <div class="flex justify-between"><span class="text-olive-green">Shipping:</span><span class="font-bold text-forest-green">{{ shippingCost.toFixed(2) }} DT</span></div>
-              <div class="flex justify-between"><span class="text-olive-green">Tax (10%):</span><span class="font-bold text-forest-green">{{ cartTax.toFixed(2) }} DT</span></div>
+              <div class="flex justify-between"><span class="text-olive-green">Shipping:</span><span class="font-bold text-forest-green">{{ cartShipping.toFixed(2) }} DT</span></div>
+              <div class="flex justify-between"><span class="text-olive-green">Tax:</span><span class="font-bold text-forest-green">{{ cartTax.toFixed(2) }} DT</span></div>
               <div *ngIf="promoDiscount > 0" class="flex justify-between text-green-600">
-                <span class="font-bold">🏷️ Promo ({{ promoCode }}):</span>
+                <span class="font-bold">🏷️ Promo:</span>
                 <span class="font-bold">− {{ promoDiscount.toFixed(2) }} DT</span>
               </div>
               <div class="border-t border-sage-green/20 pt-3 flex justify-between items-center">
                 <span class="text-xl font-bold text-forest-green">Total:</span>
                 <span class="text-3xl font-bold text-forest-green">{{ cartTotal.toFixed(2) }} DT</span>
               </div>
-              <div class="flex justify-between items-center text-sm">
-                <span class="text-olive-green">💎 Points to earn:</span>
-                <span class="font-bold text-purple-600">{{ Math.floor(cartTotal) }} points</span>
-              </div>
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
             </div>
-
-            <div class="flex justify-between items-center text-sm text-gray-600">
-              <span>Sous-total HT</span>
-              <span class="font-medium text-gray-800">{{ cartSubtotal | number:'1.2-2' }} {{ currencySymbol }}</span>
-            </div>
-
-            <div class="flex justify-between items-center text-sm text-gray-600">
-              <span class="flex items-center gap-1">
-                TVA
-                <span class="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">
-                  {{ currentVatRate }}%
-                </span>
-                <span class="text-xs text-gray-400">({{ currentCountryCode }})</span>
-              </span>
-              <span class="font-medium text-gray-800">{{ cartTax | number:'1.2-2' }} {{ currencySymbol }}</span>
-            </div>
-
-            <div class="flex justify-between items-center text-sm text-gray-600">
-              <span>Livraison</span>
-              <span *ngIf="cartShipping === 0" class="text-green-600 font-semibold text-sm">✓ Offerte</span>
-              <span *ngIf="cartShipping > 0" class="font-medium text-gray-800">
-                {{ cartShipping | number:'1.2-2' }} {{ currencySymbol }}
-              </span>
-            </div>
-
-            <div *ngIf="cartCustoms > 0" class="flex justify-between items-center text-sm text-gray-600">
-              <span class="flex items-center gap-1">
-                Douanes
-                <span class="text-xs text-gray-400">(hors UE)</span>
-              </span>
-              <span class="font-medium text-gray-800">{{ cartCustoms | number:'1.2-2' }} {{ currencySymbol }}</span>
-            </div>
-
-            <div class="border-t border-gray-100 pt-2"></div>
-
-            <div class="flex justify-between items-center">
-              <span class="font-semibold text-gray-900">Total TTC</span>
-              <span class="text-lg font-bold text-blue-600">{{ cartTotal | number:'1.2-2' }} {{ currencySymbol }}</span>
-            </div>
-
-            <p class="text-xs text-gray-400 pt-1">
-              * Prix calculés selon la législation fiscale du pays de livraison ({{ currentCountryCode }}).
-              <span *ngIf="cartShipping === 0">Livraison offerte pour les commandes &gt; 100 {{currencySymbol}}.</span>
-            </p>
           </div>
 
           <!-- Shipping Address -->
           <div class="mb-6">
             <h4 class="font-semibold text-forest-green mb-4">📍 Shipping Address</h4>
-            <div class="bg-sage-green/10 rounded-lg p-4">
-              <label class="block text-sm font-medium text-forest-green mb-2">Delivery Address *</label>
-              <textarea
-                [(ngModel)]="shippingAddress"
-                name="shippingAddress"
-                rows="3"
-                class="w-full px-4 py-3 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/50 resize-none"
-                placeholder="Enter your full shipping address (Street, City, State, ZIP Code, Country)">
-              </textarea>
-              <p *ngIf="!shippingAddress?.trim()" class="text-sm text-red-500 mt-1">
-                ⚠️ Shipping address is required for checkout
-              </p>
-              <div class="mt-3 flex items-start gap-2">
-                <input type="checkbox" id="saveAddress" class="mt-1">
-                <label for="saveAddress" class="text-sm text-olive-green">Save this address for future orders</label>
-              </div>
-            </div>
+            <textarea [(ngModel)]="shippingAddress" name="shippingAddress" rows="3"
+              class="w-full px-4 py-3 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/50 resize-none"
+              placeholder="Enter your shipping address"></textarea>
           </div>
 
-          <!-- Payment Method -->
-          <div class="mb-6">
-            <h4 class="font-semibold text-forest-green mb-4">💳 Payment Method</h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-<<<<<<< HEAD
-              <button (click)="selectedPaymentMethod = 'wallet'"
-                      class="p-4 border-2 rounded-lg transition-colors"
-                      [ngClass]="selectedPaymentMethod === 'wallet'
-                  ? 'border-forest-green bg-forest-green text-cream-beige'
-                  : 'border-sage-green/40 text-forest-green hover:border-forest-green'">
-=======
-              <button type="button" (click)="selectedPaymentMethod = 'wallet'"
-                class="p-4 border-2 rounded-lg transition-colors"
-                [ngClass]="selectedPaymentMethod === 'wallet' ? 'border-forest-green bg-forest-green text-cream-beige' : 'border-sage-green/40 text-forest-green hover:border-forest-green'">
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
-                <div class="flex items-center gap-3">
-                  <span class="text-2xl">💰</span>
-                  <div class="text-left">
-                    <p class="font-bold">CampConnect Wallet</p>
-                    <p class="text-sm">Balance: ${{ (walletBalance || 0).toFixed(2) }}</p>
-                  </div>
-                </div>
-              </button>
-<<<<<<< HEAD
-              <button (click)="selectedPaymentMethod = 'card'"
-                      class="p-4 border-2 rounded-lg transition-colors"
-                      [ngClass]="selectedPaymentMethod === 'card'
-                  ? 'border-forest-green bg-forest-green text-cream-beige'
-                  : 'border-sage-green/40 text-forest-green hover:border-forest-green'">
-=======
-              <button type="button" (click)="selectedPaymentMethod = 'card'"
-                class="p-4 border-2 rounded-lg transition-colors"
-                [ngClass]="selectedPaymentMethod === 'card' ? 'border-forest-green bg-forest-green text-cream-beige' : 'border-sage-green/40 text-forest-green hover:border-forest-green'">
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
-                <div class="flex items-center gap-3">
-                  <span class="text-2xl">💳</span>
-                  <div class="text-left">
-                    <p class="font-bold">Credit/Debit Card</p>
-                    <p class="text-sm">Secure payment</p>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <!-- Checkout button -->
+          <!-- Actions -->
           <div class="flex gap-4">
             <button (click)="checkout()"
-                    [disabled]="!shippingAddress?.trim() || isLoading || (selectedPaymentMethod === 'wallet' && walletBalance < cartTotal)"
-                    class="flex-1 bg-forest-green text-cream-beige py-4 rounded-lg hover:bg-olive-green transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]">
-              <span *ngIf="isLoading">⏳ Processing...</span>
-              <span *ngIf="!isLoading && !shippingAddress?.trim()">📍 Enter Shipping Address</span>
-              <span *ngIf="!isLoading && shippingAddress?.trim() && selectedPaymentMethod === 'wallet' && walletBalance < cartTotal">
-                ⚠️ Insufficient Balance
-              </span>
-              <span *ngIf="!isLoading && shippingAddress?.trim() && !(selectedPaymentMethod === 'wallet' && walletBalance < cartTotal)">
-                ✅ Proceed to Checkout
-              </span>
+                    [disabled]="!shippingAddress?.trim() || isLoading"
+                    class="flex-1 bg-forest-green text-cream-beige py-4 rounded-lg hover:bg-olive-green transition-colors font-bold text-lg disabled:opacity-50">
+              ✅ Checkout
             </button>
             <button (click)="clearCart()"
                     class="px-6 bg-red-500 text-white py-4 rounded-lg hover:bg-red-600 transition-colors">
@@ -455,7 +300,6 @@
             </button>
           </div>
         </div>
-        <!-- /cartItems.length > 0 -->
 
         <div *ngIf="cartItems.length === 0" class="text-center py-12">
           <p class="text-4xl mb-2">🛒</p>
@@ -465,7 +309,6 @@
             Continue Shopping
           </a>
         </div>
-
       </div>
       <!-- /cart -->
 
@@ -484,25 +327,9 @@
               <input type="email" [(ngModel)]="customerEmail" name="email"
                      class="w-full px-4 py-2 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/40">
             </div>
-            <div>
-              <label class="block text-sm font-medium text-forest-green mb-2">Phone</label>
-              <input type="tel" [(ngModel)]="customerPhone" name="phone"
-                     class="w-full px-4 py-2 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/40">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-forest-green mb-2">Country</label>
-              <input type="text" [(ngModel)]="customerCountry" name="country"
-                     class="w-full px-4 py-2 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/40">
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-forest-green mb-2">Shipping Address</label>
-            <textarea [(ngModel)]="customerAddress" name="address" rows="3"
-                      class="w-full px-4 py-2 border border-sage-green/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-forest-green/40">
-            </textarea>
           </div>
           <button type="button" (click)="saveProfile()"
-                  class="bg-olive-green text-cream-beige px-6 py-3 rounded-lg hover:bg-forest-green transition-colors min-h-[44px]">
+                  class="bg-olive-green text-cream-beige px-6 py-3 rounded-lg hover:bg-forest-green transition-colors">
             💾 Save Changes
           </button>
         </form>
@@ -510,8 +337,6 @@
       <!-- /profile -->
 
     </div>
-    <!-- /main content card -->
-
   </div>
 </div>
 
@@ -520,36 +345,18 @@
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
      (click)="showAddFundsModal = false">
   <div class="bg-white rounded-xl max-w-md w-full p-6" (click)="$event.stopPropagation()">
-    <h2 class="text-2xl font-bold text-forest-green mb-4">➕ Add Funds to Wallet</h2>
+    <h2 class="text-2xl font-bold text-forest-green mb-4">➕ Add Funds</h2>
     <div class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-forest-green mb-2">Amount</label>
-        <input type="number" [(ngModel)]="addFundsAmount" name="addFundsAmount"
-               min="10" step="10"
-               class="w-full px-4 py-2 border border-sage-green/40 rounded-lg">
-      </div>
-      <div class="grid grid-cols-3 gap-2">
-        <button *ngFor="let amount of [50, 100, 200]" (click)="addFundsAmount = amount"
-                class="bg-sage-green/20 text-forest-green py-2 rounded-lg hover:bg-sage-green/40">
-          ${{ amount }}
-        </button>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-forest-green mb-2">Payment Method</label>
-        <select [(ngModel)]="fundingSource" name="fundingSource"
-                class="w-full px-4 py-2 border border-sage-green/40 rounded-lg">
-          <option value="CARD">💳 Credit/Debit Card</option>
-          <option value="BANK_TRANSFER">🏦 Bank Transfer</option>
-        </select>
-      </div>
+      <input type="number" [(ngModel)]="addFundsAmount" name="addFundsAmount"
+             class="w-full px-4 py-2 border border-sage-green/40 rounded-lg">
       <div class="flex gap-4">
         <button (click)="confirmAddFunds()"
                 [disabled]="isLoading"
-                class="flex-1 bg-forest-green text-cream-beige py-3 rounded-lg hover:bg-olive-green transition-colors disabled:opacity-50">
-          {{ isLoading ? '⏳ Processing...' : '✅ Add Funds' }}
+                class="flex-1 bg-forest-green text-cream-beige py-3 rounded-lg">
+          ✅ Add
         </button>
         <button (click)="showAddFundsModal = false"
-                class="px-6 bg-gray-100 text-forest-green py-3 rounded-lg hover:bg-gray-200 transition-colors">
+                class="px-6 bg-gray-100 py-3 rounded-lg">
           Cancel
         </button>
       </div>
@@ -562,22 +369,12 @@
      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
   <div class="bg-white rounded-xl max-w-md w-full p-8 text-center">
     <div class="text-6xl mb-4">✅</div>
-    <h2 class="text-2xl font-bold text-forest-green mb-4">Order Placed Successfully!</h2>
-    <p class="text-olive-green mb-6">Your order #{{ latestOrderId }} has been confirmed</p>
-    <div class="bg-sage-green/10 rounded-lg p-4 mb-6">
-      <p class="text-sm text-olive-green mb-2">Earned Rewards:</p>
-      <p class="text-2xl font-bold text-purple-600">+{{ lastEarnedPoints }} Points</p>
-    </div>
-    <div class="flex gap-4">
-      <button (click)="showCheckoutSuccess = false; activeTab = 'orders'"
-              class="flex-1 bg-forest-green text-cream-beige py-3 rounded-lg hover:bg-olive-green transition-colors">
-        View Orders
-      </button>
-      <button (click)="showCheckoutSuccess = false" routerLink="/marketplace"
-              class="flex-1 bg-white border border-forest-green text-forest-green py-3 rounded-lg hover:bg-sage-green/20 transition-colors">
-        Continue Shopping
-      </button>
-    </div>
+    <h2 class="text-2xl font-bold text-forest-green mb-4">Order Placed!</h2>
+    <p class="text-olive-green mb-6">Order #{{ latestOrderId }} confirmed.</p>
+    <button (click)="showCheckoutSuccess = false; activeTab = 'orders'"
+            class="w-full bg-forest-green text-cream-beige py-3 rounded-lg">
+      View Orders
+    </button>
   </div>
 </div>
 

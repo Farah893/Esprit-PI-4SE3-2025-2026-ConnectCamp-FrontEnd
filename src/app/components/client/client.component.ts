@@ -9,18 +9,14 @@ import { AuthService } from '../../services/auth.service';
 import { AccountProfileService } from '../../services/account-profile.service';
 import { NotificationService } from '../../services/notification.service';
 import { ApiService } from '../../services/api.service';
-<<<<<<< HEAD
 import { GeolocationService } from '../../services/geolocation.service';
 import { PriceCalculationService, CartTotals } from '../../services/price-calculation.service';
-import { InvoiceService } from '../../services/invoice.service';           // ← NEW
-import { TrackingService } from '../../services/tracking.service';         // ← NEW
+import { InvoiceService } from '../../services/invoice.service';
+import { TrackingService } from '../../services/tracking.service';
 import { CountrySelectorComponent } from '../country-selector/country-selector.component';
-import { OrderTrackingComponent } from '../order-tracking/order-tracking.component'; // ← NEW
-import { CartItem, Wallet, WalletTransaction, Order } from '../../models/api.models';
-=======
+import { OrderTrackingComponent } from '../order-tracking/order-tracking.component';
 import { CartItem, Wallet, WalletTransaction, Order, CreateOrderDto } from '../../models/api.models';
 import { PromotionService } from '../../modules/services/services/promotion.service';
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
 
 @Component({
   selector: 'app-client',
@@ -30,7 +26,7 @@ import { PromotionService } from '../../modules/services/services/promotion.serv
     FormsModule,
     RouterLink,
     CountrySelectorComponent,
-    OrderTrackingComponent,   // ← NEW
+    OrderTrackingComponent,
   ],
   templateUrl: './client.component.html',
   styleUrls: ['./client.component.css']
@@ -43,18 +39,19 @@ export class ClientComponent implements OnInit {
   errorMessage = '';
 
   menuItems = [
-    { id: 'wallet', label: 'My Wallet', icon: '💰', badge: '' },
-    { id: 'orders', label: 'My Orders', icon: '📦', badge: '' },
-    { id: 'cart', label: 'Shopping Cart', icon: '🛒', badge: '0' },
-    { id: 'profile', label: 'Profile', icon: '⚙️', badge: '' }
+    { id: 'wallet', label: 'My Wallet',     icon: '💰', badge: '' },
+    { id: 'orders', label: 'My Orders',     icon: '📦', badge: '' },
+    { id: 'cart',   label: 'Shopping Cart', icon: '🛒', badge: '0' },
+    { id: 'profile',label: 'Profile',       icon: '⚙️', badge: '' }
   ];
 
   // Customer Info
-  customerName = '';
-  customerEmail = '';
-  customerPhone = '';
+  customerName    = '';
+  customerEmail   = '';
+  customerPhone   = '';
   customerCountry = '';
   customerAddress = '';
+  shippingAddress = '';
 
   // Wallet
   walletBalance: number = 0;
@@ -69,7 +66,6 @@ export class ClientComponent implements OnInit {
   // Cart
   cartItems: CartItem[] = [];
   selectedPaymentMethod: 'wallet' | 'card' = 'wallet';
-  shippingAddress = '';
 
   // Promo code
   promoCode = '';
@@ -81,20 +77,20 @@ export class ClientComponent implements OnInit {
   }
 
   // Modals
-  showAddFundsModal = false;
-  showWithdrawModal = false;
-  showTransferModal = false;
-  showCheckoutSuccess = false;
-  addFundsAmount = 100;
+  showAddFundsModal    = false;
+  showWithdrawModal    = false;
+  showTransferModal    = false;
+  showCheckoutSuccess  = false;
+  addFundsAmount       = 100;
   fundingSource: 'CARD' | 'BANK_TRANSFER' = 'CARD';
-  latestOrderId = '';
-  lastEarnedPoints = 0;
+  latestOrderId     = '';
+  lastEarnedPoints  = 0;
 
-  // ── Tracking modal (NEW) ───────────────────────────────
+  // ── Tracking modal ──────────────────────────────────
   showTrackingModal = false;
   trackingOrderId: number | string = '';
 
-  // ── Invoice download state (NEW) ──────────────────────
+  // ── Invoice download state ──────────────────────────
   downloadingInvoiceId: number | string | null = null;
 
   // Geo & pricing
@@ -104,32 +100,28 @@ export class ClientComponent implements OnInit {
   isCalculatingPrices = false;
 
   constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private cartService: CartService,
-    private walletService: WalletService,
-    private orderService: OrderService,
-    private authService: AuthService,
-    private accountProfile: AccountProfileService,
+    private route:               ActivatedRoute,
+    private router:              Router,
+    private cartService:         CartService,
+    private walletService:       WalletService,
+    private orderService:        OrderService,
+    private authService:         AuthService,
+    private accountProfile:      AccountProfileService,
     private notificationService: NotificationService,
-<<<<<<< HEAD
-    private apiService: ApiService,
-    private geoService: GeolocationService,
-    private priceService: PriceCalculationService,
-    private invoiceService: InvoiceService,          // ← NEW
-    private trackingService: TrackingService,         // ← NEW
-=======
-    private apiService: ApiService,
-    private promotionService: PromotionService
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
-  ) { }
+    private apiService:          ApiService,
+    private geoService:          GeolocationService,
+    private priceService:        PriceCalculationService,
+    private invoiceService:      InvoiceService,
+    private trackingService:     TrackingService,
+    private promotionService:    PromotionService
+  ) {}
 
   ngOnInit() {
     const user = this.authService.getCurrentUser();
     if (user) {
-      this.customerName = user.name || '';
-      this.customerEmail = user.email || '';
-      this.customerPhone = user.phone || '';
+      this.customerName    = user.name    || '';
+      this.customerEmail   = user.email   || '';
+      this.customerPhone   = user.phone   || '';
       this.customerCountry = user.country || '';
       this.customerAddress = user.address || '';
       this.shippingAddress = user.address || '';
@@ -165,24 +157,14 @@ export class ClientComponent implements OnInit {
   loadWallet() {
     this.walletService.getMyWallet().subscribe({
       next: (wallet) => {
-<<<<<<< HEAD
-        this.walletBalance = wallet?.balance ?? 0;
-        this.loyaltyPoints = wallet?.loyaltyPoints ?? 0;
-=======
         this.walletBalance = Number(wallet?.balance) || 0;
         this.loyaltyPoints = Number(wallet?.loyaltyPoints) || 0;
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
       },
       error: () => {
         this.walletService.getBalance().subscribe({
           next: (data) => {
-<<<<<<< HEAD
-            this.walletBalance = data?.balance ?? 0;
-            this.loyaltyPoints = data?.loyaltyPoints ?? 0;
-=======
             this.walletBalance = Number(data?.balance) || 0;
             this.loyaltyPoints = Number(data?.loyaltyPoints) || 0;
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
           },
           error: () => { this.walletBalance = 0; this.loyaltyPoints = 0; }
         });
@@ -191,7 +173,7 @@ export class ClientComponent implements OnInit {
 
     this.walletService.getTransactions().subscribe({
       next: (transactions) => this.walletTransactions = transactions ?? [],
-      error: () => this.walletTransactions = []
+      error: ()            => this.walletTransactions = []
     });
   }
 
@@ -201,7 +183,7 @@ export class ClientComponent implements OnInit {
       error: () => {
         this.orderService.getAll().subscribe({
           next: (orders) => this.customerOrders = orders ?? [],
-          error: () => this.customerOrders = []
+          error: ()       => this.customerOrders = []
         });
       }
     });
@@ -222,19 +204,17 @@ export class ClientComponent implements OnInit {
     return this.cartSubtotal * (rate / 100);
   }
 
-  get cartShipping(): number { return this.cartTotals?.shipping ?? 0; }
-  get cartCustoms(): number { return this.cartTotals?.customs ?? 0; }
+  get cartShipping(): number  { return this.cartTotals?.shipping ?? 0; }
+  get cartCustoms(): number   { return this.cartTotals?.customs  ?? 0; }
 
   get cartTotal(): number {
-<<<<<<< HEAD
-    return this.cartTotals?.total
+    const baseTotal = this.cartTotals?.total 
       ?? (this.cartSubtotal + this.cartTax + this.cartShipping + this.cartCustoms);
+    return Math.max(0, baseTotal - this.promoDiscount);
   }
 
   get currentVatRate(): number {
     return this.geoService.getVatRateForCountry(this.currentCountryCode);
-=======
-    return Math.max(0, this.cartSubtotal + this.shippingCost + this.cartTax - this.promoDiscount);
   }
 
   applyPromo(): void {
@@ -260,7 +240,6 @@ export class ClientComponent implements OnInit {
   removePromo(): void {
     this.promoCode = '';
     this.promoResult = null;
->>>>>>> 0cba2b9b (feat: integrated advanced ML features, UI refinements, and navigation fixes)
   }
 
   get filteredOrders(): Order[] {
@@ -297,7 +276,7 @@ export class ClientComponent implements OnInit {
 
   updateQuantity(index: number, change: number) {
     const item = this.cartItems[index];
-    const newQty = item.quantity + change;
+    const newQty = (item.quantity || 1) + change;
     if (newQty <= 0) this.removeFromCart(index);
     else this.cartService.updateQuantity(item.productId, newQty).subscribe();
   }
@@ -317,8 +296,8 @@ export class ClientComponent implements OnInit {
 
   openAddFundsModal() {
     this.showAddFundsModal = true;
-    this.addFundsAmount = 100;
-    this.fundingSource = 'CARD';
+    this.addFundsAmount    = 100;
+    this.fundingSource     = 'CARD';
   }
 
   confirmAddFunds() {
@@ -326,10 +305,10 @@ export class ClientComponent implements OnInit {
     this.isLoading = true;
     this.walletService.addFunds({ amount: this.addFundsAmount, source: this.fundingSource }).subscribe({
       next: (wallet) => {
-        this.walletBalance = wallet?.balance ?? 0;
-        this.loyaltyPoints = wallet?.loyaltyPoints ?? 0;
+        this.walletBalance     = Number(wallet?.balance) || 0;
+        this.loyaltyPoints     = Number(wallet?.loyaltyPoints) || 0;
         this.showAddFundsModal = false;
-        this.isLoading = false;
+        this.isLoading         = false;
         alert(`✅ Successfully added $${this.addFundsAmount} to your wallet!`);
         this.loadWallet();
       },
@@ -353,12 +332,12 @@ export class ClientComponent implements OnInit {
     this.isCalculatingPrices = true;
     const items = this.cartItems.map(item => ({
       productId: Number(item.productId),
-      quantity: item.quantity ?? 1
+      quantity:  item.quantity ?? 1
     }));
     this.priceService.calculateCartTotals(items, this.currentCountryCode).subscribe({
       next: totals => {
-        this.cartTotals = totals;
-        this.currencySymbol = totals.currencySymbol;
+        this.cartTotals      = totals;
+        this.currencySymbol  = totals.currencySymbol;
         this.isCalculatingPrices = false;
       },
       error: () => { this.cartTotals = null; this.isCalculatingPrices = false; }
@@ -376,14 +355,14 @@ export class ClientComponent implements OnInit {
     }
 
     const orderData = {
-      shippingAddress: this.shippingAddress.trim(),
-      shippingName: this.customerName || '',
-      shippingPhone: this.customerPhone || '',
-      shippingCity: this.customerCountry || '',
+      shippingAddress:    this.shippingAddress.trim(),
+      shippingName:       this.customerName    || '',
+      shippingPhone:      this.customerPhone   || '',
+      shippingCity:       this.customerCountry || '',
       shippingPostalCode: '',
-      shippingCountry: this.currentCountryCode,
-      shippingCurrency: this.currencySymbol,
-      paymentMethod: this.selectedPaymentMethod === 'wallet' ? 'WALLET' : 'CARD',
+      shippingCountry:    this.currentCountryCode,
+      shippingCurrency:   this.currencySymbol,
+      paymentMethod:      this.selectedPaymentMethod === 'wallet' ? 'WALLET' : 'CARD',
       items: this.cartItems.map(item => ({
         productId: item.productId, quantity: item.quantity,
         type: item.type, rentalDays: item.rentalDays
@@ -393,10 +372,10 @@ export class ClientComponent implements OnInit {
     this.isLoading = true;
     this.orderService.create(orderData).subscribe({
       next: (order: any) => {
-        this.latestOrderId = String(order?.id ?? '');
-        this.lastEarnedPoints = Math.floor(this.cartTotal);
+        this.latestOrderId       = String(order?.id ?? '');
+        this.lastEarnedPoints    = Math.floor(this.cartTotal);
         this.showCheckoutSuccess = true;
-        this.isLoading = false;
+        this.isLoading           = false;
         this.cartService.clearCart().subscribe();
         this.loadWallet();
         this.loadOrders();
@@ -421,30 +400,25 @@ export class ClientComponent implements OnInit {
     alert(`Order #${order.id}\nStatus: ${order.status}\nTotal: $${total}\nItems: ${count}`);
   }
 
-  /** Opens the new tracking modal instead of a plain alert */
   trackOrder(order: Order) {
-    this.trackingOrderId = order.id;
+    this.trackingOrderId  = order.id;
     this.showTrackingModal = true;
   }
 
   closeTrackingModal() {
     this.showTrackingModal = false;
-    this.trackingOrderId = '';
+    this.trackingOrderId  = '';
   }
 
   cancelOrder(order: Order) {
     if (confirm(`Are you sure you want to cancel Order #${order.id}?`)) {
       this.orderService.cancel(String(order.id)).subscribe({
-        next: () => { alert(`✅ Order #${order.id} cancelled.`); this.loadOrders(); },
+        next: ()     => { alert(`✅ Order #${order.id} cancelled.`); this.loadOrders(); },
         error: (err) => alert('❌ Failed to cancel: ' + (err.message || 'Unknown error'))
       });
     }
   }
 
-  /**
-   * Downloads the PDF invoice from the backend.
-   * Backend: GET /api/orders/{id}/invoice/pdf
-   */
   downloadInvoice(order: Order) {
     this.downloadingInvoiceId = order.id;
 
@@ -455,7 +429,6 @@ export class ClientComponent implements OnInit {
       },
       error: (err) => {
         this.downloadingInvoiceId = null;
-        // Fallback: try to generate first then download
         alert('❌ Invoice not available yet. The invoice is generated on first request — please try again in a moment.');
         console.error('Invoice download error:', err);
       }
@@ -466,11 +439,11 @@ export class ClientComponent implements OnInit {
 
   getOrderStatusBadge(status: string): string {
     const map: Record<string, string> = {
-      'PENDING': 'bg-yellow-100 text-yellow-800',
+      'PENDING':    'bg-yellow-100 text-yellow-800',
       'PROCESSING': 'bg-blue-100 text-blue-800',
-      'SHIPPED': 'bg-purple-100 text-purple-800',
-      'DELIVERED': 'bg-green-100 text-green-800',
-      'CANCELLED': 'bg-red-100 text-red-800'
+      'SHIPPED':    'bg-purple-100 text-purple-800',
+      'DELIVERED':  'bg-green-100 text-green-800',
+      'CANCELLED':  'bg-red-100 text-red-800'
     };
     return map[status] || 'bg-gray-100 text-gray-800';
   }
@@ -485,8 +458,8 @@ export class ClientComponent implements OnInit {
   getStatusBadge(status: string): string {
     const map: Record<string, string> = {
       'COMPLETED': 'bg-green-100 text-green-800',
-      'PENDING': 'bg-yellow-100 text-yellow-800',
-      'FAILED': 'bg-red-100 text-red-800'
+      'PENDING':   'bg-yellow-100 text-yellow-800',
+      'FAILED':    'bg-red-100 text-red-800'
     };
     return map[status] || 'bg-gray-100 text-gray-800';
   }
@@ -508,9 +481,9 @@ export class ClientComponent implements OnInit {
 
     this.isLoading = true;
     const updatedUser = {
-      name: this.customerName,
-      email: this.customerEmail,
-      phone: this.customerPhone,
+      name:    this.customerName,
+      email:   this.customerEmail,
+      phone:   this.customerPhone,
       country: this.customerCountry,
       address: this.customerAddress
     };
