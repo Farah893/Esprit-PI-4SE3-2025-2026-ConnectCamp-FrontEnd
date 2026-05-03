@@ -12,6 +12,8 @@ interface MarketplaceItem {
     status: string;
 }
 
+import { Router } from '@angular/router';
+
 @Component({
     selector: 'app-marketplace-management',
     standalone: true,
@@ -20,6 +22,8 @@ interface MarketplaceItem {
     styleUrl: './marketplace-management.component.css'
 })
 export class MarketplaceManagementComponent {
+    constructor(private router: Router) {}
+
     @Input() set section(value: string) {
         if (value && value !== 'marketplace') {
             this.activePortalSection = value;
@@ -91,6 +95,20 @@ export class MarketplaceManagementComponent {
             case 'out of stock':
                 return 'bg-red-100 text-red-700';
             default: return 'bg-gray-100 text-gray-700';
+        }
+    }
+
+    onAddAction() {
+        if (this.activePortalSection === 'products_categories') {
+            if (this.activeTab === 'categories') {
+                alert('🛠️ Category creation is managed in the backend or specific Admin section.');
+            } else {
+                if (confirm('Products are usually added by Sellers. Do you want to go to the Seller dashboard to add a product?')) {
+                    this.router.navigate(['/seller']);
+                }
+            }
+        } else {
+            alert('🛠️ This management action is not yet implemented in the mock view.');
         }
     }
 }

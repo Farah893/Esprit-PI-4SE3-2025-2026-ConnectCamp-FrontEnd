@@ -13,8 +13,14 @@ export class AuthGuard implements CanActivate {
     }
 
     const requiredRole = route.data['role'];
+    const requiredRoles = route.data['roles'] as string[];
+
     if (requiredRole && !this.authService.hasRole(requiredRole)) {
-      // Logged in but wrong role — go home, not to login
+      this.router.navigate(['/']);
+      return false;
+    }
+
+    if (requiredRoles && !requiredRoles.some(r => this.authService.hasRole(r))) {
       this.router.navigate(['/']);
       return false;
     }

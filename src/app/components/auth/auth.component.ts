@@ -141,6 +141,15 @@ export class AuthComponent implements OnInit, OnDestroy {
           this.router.navigate(['/admin']);
           return;
         }
+        if (role === 'SELLER') {
+          this.router.navigate(['/seller']);
+          return;
+        }
+        if (role === 'ORGANIZER') {
+          this.router.navigate(['/organizer/events']);
+          return;
+        }
+
         if (this.authService.hasCompletedPreferences(auth.user)) {
           this.router.navigate(['/home']);
         } else {
@@ -218,6 +227,15 @@ export class AuthComponent implements OnInit, OnDestroy {
           setTimeout(() => this.router.navigate(['/admin']), 1200);
           return;
         }
+        if (role === 'SELLER') {
+          setTimeout(() => this.router.navigate(['/seller']), 1200);
+          return;
+        }
+        if (role === 'ORGANIZER') {
+          setTimeout(() => this.router.navigate(['/organizer/events']), 1200);
+          return;
+        }
+
         if (this.authService.hasCompletedPreferences(auth.user)) {
           setTimeout(() => this.router.navigate(['/home']), 1200);
         } else {
