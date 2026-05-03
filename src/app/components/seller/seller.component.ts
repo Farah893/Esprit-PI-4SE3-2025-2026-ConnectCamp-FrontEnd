@@ -12,6 +12,8 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
+import { SumByPipe } from '../../pipe/sum-by.pipe';
+
 import {
   Product, Category, Inventory, StockMovement, Warehouse, Order, Rental,
   CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto,
@@ -23,22 +25,25 @@ import { PricePredictionService, PricePrediction } from '../../services/price-pr
 @Component({
   selector: 'app-seller',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, SumByPipe], // ← ajouter
   templateUrl: './seller.component.html',
   styleUrls: ['./seller.component.css']
+
 })
 export class SellerComponent implements OnInit {
   activeSection = 'products';
   isLoading = false;
   errorMessage = '';
 
+  // Dans seller.component.ts, remplacer le tableau menuItems :
   menuItems = [
-    { id: 'dashboard',   label: 'Dashboard',             icon: '📊' },
-    { id: 'products',    label: 'Products & Categories',  icon: '📦' },
-    { id: 'inventory',   label: 'Inventory & Warehouses', icon: '🏭' },
-    { id: 'orders',      label: 'Orders',                 icon: '📋' },
-    { id: 'rentals',     label: 'Rentals Management',     icon: '📅' },
-    { id: 'statistics',  label: 'Order Statistics',       icon: '📈' }
+    { id: 'dashboard',          label: 'Dashboard',             icon: '📊' },
+    { id: 'products',           label: 'Products & Categories',  icon: '📦' },
+    { id: 'inventory',          label: 'Inventory & Warehouses', icon: '🏭' },
+    { id: 'orders',             label: 'Orders',                 icon: '📋' },
+    { id: 'rentals',            label: 'Rentals Management',     icon: '📅' },
+    { id: 'statistics',         label: 'Order Statistics',       icon: '📈' },
+    { id: 'category-analytics', label: 'Category Analytics',     icon: '🏷️' }, // ← NOUVEAU
   ];
 
   activeSubSection: 'categories' | 'products' = 'categories';
@@ -53,7 +58,21 @@ export class SellerComponent implements OnInit {
   editingProductId: string | null = null;
   editingWarehouseId: string | null = null;
   editingInventoryId: string | null = null;
+  // ── Section Category Analytics ─────────────────────────────────────────────
 
+// Sales Report (JPQL JOIN)
+  categorySalesReport: any[]       = [];
+  salesReportLoading               = false;
+  salesReportStatus                = 'DELIVERED';
+
+// Orders by Category (Keyword multi-table)
+  categoryOrders: any[]            = [];
+  categoryOrdersLoading            = false;
+  categoryOrdersApplied            = false;
+  categoryOrderFilterStatus        = 'DELIVERED';
+  categoryOrderFilterCategoryId    = '';
+  categoryOrderFilterStartDate     = '';
+  categoryOrderFilterEndDate       = '';
   globalStockAlertThreshold = 15;
 
   productForm: any = {
@@ -127,8 +146,14 @@ export class SellerComponent implements OnInit {
     const d = new Date();
     d.setDate(d.getDate() - 30);
     this.orderFilterSince = d.toISOString().slice(0, 16); // format datetime-local
-
+    // Dans ngOnInit(), après l'initialisation de orderFilterSince :
+    const now = new Date();
+    const monthAgo = new Date();
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    this.categoryOrderFilterStartDate = monthAgo.toISOString().slice(0, 16);
+    this.categoryOrderFilterEndDate   = now.toISOString().slice(0, 16);
     this.loadAllData();
+
 
     this.priceInput$.pipe(
       debounceTime(800),
@@ -199,6 +224,8 @@ export class SellerComponent implements OnInit {
     this.loadRentals();
     this.loadStockMovements();
     this.loadOrderStatistics(); // ← NOUVEAU
+    this.loadCategorySalesReport(); // ← ajouter
+
   }
 
   evaluatePriceWarning(price: number) {
@@ -423,7 +450,72 @@ export class SellerComponent implements OnInit {
       error: () => alert('❌ Failed to update product status')
     });
   }
+// ── NOUVEAU 3 : Sales Report par catégorie (JPQL JOIN) ───────────────────
+  loadCategorySalesReport(): void {
+    this.salesReportLoading = true;
+    this.categoryService.getSalesReport(this.salesReportStatus).subscribe({
+      next: (data) => { this.categorySalesReport = data; this.salesReportLoading = false; },
+      error: ()     => { this.categorySalesReport = []; this.salesReportLoading = false; }
+    });
+  }
 
+// ── NOUVEAU 4 : Orders by Category (Keyword multi-table) ────────────────
+  applyOrdersByCategoryFilter(): void {
+    if (!this.categoryOrderFilterCategoryId) { alert('⚠️ Please select a category'); return; }
+    if (!this.categoryOrderFilterStartDate || !this.categoryOrderFilterEndDate) {
+      alert('⚠️ Please select a date range'); return;
+    }
+    const startIso = this.categoryOrderFilterStartDate.length === 16
+      ? this.categoryOrderFilterStartDate + ':00'
+      : this.categoryOrderFilterStartDate;
+    const endIso = this.categoryOrderFilterEndDate.length === 16
+      ? this.categoryOrderFilterEndDate + ':00'
+      : this.categoryOrderFilterEndDate;
+
+    this.categoryOrdersLoading = true;
+    this.categoryOrdersApplied = false;
+    this.categoryService.getOrdersByCategory(
+      this.categoryOrderFilterStatus,
+      this.categoryOrderFilterCategoryId,
+      startIso,
+      endIso
+    ).subscribe({
+      next: (orders) => {
+        this.categoryOrders        = orders;
+        this.categoryOrdersLoading = false;
+        this.categoryOrdersApplied = true;
+      },
+      error: () => {
+        this.categoryOrders        = [];
+        this.categoryOrdersLoading = false;
+        this.categoryOrdersApplied = true;
+      }
+    });
+  }
+
+  resetOrdersByCategoryFilter(): void {
+    this.categoryOrders        = [];
+    this.categoryOrdersApplied = false;
+    this.categoryOrderFilterCategoryId = '';
+    this.categoryOrderFilterStatus     = 'DELIVERED';
+    const now = new Date();
+    const monthAgo = new Date();
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    this.categoryOrderFilterStartDate = monthAgo.toISOString().slice(0, 16);
+    this.categoryOrderFilterEndDate   = now.toISOString().slice(0, 16);
+  }
+
+// ── Helper : max revenue pour la barre de progression ───────────────────
+  getSalesReportBarWidth(revenue: number): number {
+    if (!this.categorySalesReport.length) return 0;
+    const max = Math.max(...this.categorySalesReport.map(s => s.totalRevenue ?? 0));
+    return max > 0 ? Math.round((revenue / max) * 100) : 0;
+  }
+
+// ── Helper : nom de catégorie depuis son id ───────────────────────────────
+  getCategoryNameById(id: string): string {
+    return this.categories.find(c => String(c.id) === String(id))?.name ?? '—';
+  }
   cancelProductForm() { this.showProductForm = false; this.editingProductId = null; this.resetProductForm(); }
 
   // ── Inventory / Stock ─────────────────────────────────────────────────────

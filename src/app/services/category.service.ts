@@ -46,4 +46,25 @@ export class CategoryService {
   updateProductCount(id: string): Observable<any> {
     return this.http.patch<any>(`${this.url}/${id}/product-count`, {}).pipe(map(unwrapOne));
   }
+  // category.service.ts — ajouter à la fin de la classe
+
+  /** GET /api/categories/sales-report?status=DELIVERED */
+  getSalesReport(status: string = 'DELIVERED'): Observable<any[]> {
+    return this.http
+      .get<any>(`${this.url}/sales-report`, { params: { status } })
+      .pipe(map(res => (Array.isArray(res) ? res : res?.data ?? [])));
+  }
+
+  /** GET /api/orders/by-category?status=X&categoryId=Y&startDate=Z&endDate=W */
+  getOrdersByCategory(
+    status: string,
+    categoryId: string,
+    startDate: string,
+    endDate: string
+  ): Observable<any[]> {
+    const params = { status, categoryId, startDate, endDate };
+    return this.http
+      .get<any>(`${this.url.replace('/categories', '/orders')}/by-category`, { params })
+      .pipe(map(res => (Array.isArray(res) ? res : res?.data ?? [])));
+  }
 }

@@ -584,6 +584,294 @@
           <div *ngIf="filteredRentals.length === 0" class="bg-white rounded-xl p-12 shadow-md text-center"><p class="text-4xl mb-2">📅</p><p class="text-olive-green">No rentals found</p></div>
         </div>
       </div>
+      <!-- ==================== CATEGORY ANALYTICS ==================== -->
+      <div *ngIf="activeSection === 'category-analytics'">
+        <div class="mb-8">
+          <h1 class="text-4xl font-bold text-forest-green mb-2">🏷️ Category Analytics</h1>
+          <p class="text-olive-green">Sales report &amp; order explorer — multi-table queries</p>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════
+             BLOC 1 — SALES REPORT  (JPQL JOIN : Category→Product→OrderItem→Order)
+             ════════════════════════════════════════════════════════════ -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+          <div class="flex items-start justify-between mb-5">
+            <div>
+              <h2 class="text-xl font-bold text-forest-green flex items-center gap-2">
+                📊 Revenue by Category
+                <span class="text-xs font-normal bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+            JPQL JOIN
+          </span>
+              </h2>
+              <p class="text-xs text-olive-green mt-0.5">
+                Category → Product → OrderItem → Order — grouped &amp; aggregated
+              </p>
+            </div>
+            <!-- Controls -->
+            <div class="flex items-center gap-3">
+              <select [(ngModel)]="salesReportStatus"
+                      class="px-3 py-2 border border-sage-green rounded-lg text-sm">
+                <option value="DELIVERED">Delivered</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="SHIPPED">Shipped</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="PENDING">Pending</option>
+              </select>
+              <button (click)="loadCategorySalesReport()"
+                      [disabled]="salesReportLoading"
+                      class="bg-forest-green text-cream-beige px-5 py-2 rounded-lg hover:bg-olive-green
+                       disabled:opacity-50 text-sm font-medium whitespace-nowrap">
+                {{ salesReportLoading ? '⏳ Loading...' : '🔄 Run Report' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div *ngIf="salesReportLoading" class="text-center py-10">
+            <p class="text-4xl mb-2 animate-pulse">📊</p>
+            <p class="text-olive-green text-sm">Running JPQL query...</p>
+          </div>
+
+          <!-- Table -->
+          <div *ngIf="!salesReportLoading">
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div class="bg-emerald-50 rounded-xl p-4 text-center">
+                <p class="text-xs text-emerald-600 font-medium mb-1">Categories</p>
+                <p class="text-3xl font-bold text-emerald-800">{{ categorySalesReport.length }}</p>
+              </div>
+              <div class="bg-blue-50 rounded-xl p-4 text-center">
+                <p class="text-xs text-blue-600 font-medium mb-1">Total Orders</p>
+                <p class="text-3xl font-bold text-blue-800">
+                  {{ categorySalesReport | sumBy:'totalOrders' }}
+                </p>
+              </div>
+              <div class="bg-purple-50 rounded-xl p-4 text-center">
+                <p class="text-xs text-purple-600 font-medium mb-1">Items Sold</p>
+                <p class="text-3xl font-bold text-purple-800">
+                  {{ categorySalesReport | sumBy:'totalItemsSold' }}
+                </p>
+              </div>
+              <div class="bg-amber-50 rounded-xl p-4 text-center">
+                <p class="text-xs text-amber-600 font-medium mb-1">Total Revenue</p>
+                <p class="text-2xl font-bold text-amber-800">
+                  {{ (categorySalesReport | sumBy:'totalRevenue') | number:'1.2-2' }} DT
+                </p>
+              </div>
+            </div>
+
+            <!-- Data table -->
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-sage-green/20">
+                <tr>
+                  <th class="px-4 py-3 text-left text-forest-green font-semibold">#</th>
+                  <th class="px-4 py-3 text-left text-forest-green font-semibold">Category</th>
+                  <th class="px-4 py-3 text-right text-forest-green font-semibold">Orders</th>
+                  <th class="px-4 py-3 text-right text-forest-green font-semibold">Items Sold</th>
+                  <th class="px-4 py-3 text-right text-forest-green font-semibold">Total Revenue</th>
+                  <th class="px-4 py-3 text-right text-forest-green font-semibold">Avg / Order</th>
+                  <th class="px-4 py-3 text-left text-forest-green font-semibold">Revenue share</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr *ngFor="let row of categorySalesReport; let i = index"
+                    class="border-b border-sage-green/20 hover:bg-sage-green/5 transition-colors">
+                  <td class="px-4 py-4 text-olive-green font-medium">{{ i + 1 }}</td>
+                  <td class="px-4 py-4">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xl">🏷️</span>
+                      <span class="font-bold text-forest-green">{{ row.categoryName }}</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-4 text-right font-bold text-blue-700">{{ row.totalOrders }}</td>
+                  <td class="px-4 py-4 text-right text-olive-green">{{ row.totalItemsSold }}</td>
+                  <td class="px-4 py-4 text-right font-bold text-green-600">
+                    {{ row.totalRevenue | number:'1.2-2' }} DT
+                  </td>
+                  <td class="px-4 py-4 text-right text-olive-green">
+                    {{ row.averageOrderValue | number:'1.2-2' }} DT
+                  </td>
+                  <td class="px-4 py-4 w-40">
+                    <div class="bg-gray-100 rounded-full h-3 w-full">
+                      <div class="bg-forest-green rounded-full h-3 transition-all"
+                           [style.width.%]="getSalesReportBarWidth(row.totalRevenue)">
+                      </div>
+                    </div>
+                    <p class="text-xs text-olive-green mt-1">
+                      {{ getSalesReportBarWidth(row.totalRevenue) }}%
+                    </p>
+                  </td>
+                </tr>
+                </tbody>
+              </table>
+
+              <div *ngIf="categorySalesReport.length === 0 && !salesReportLoading"
+                   class="text-center py-12">
+                <p class="text-4xl mb-2">📊</p>
+                <p class="text-olive-green">
+                  Click <strong>Run Report</strong> to load data, or no orders match this status.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════
+             BLOC 2 — ORDERS BY CATEGORY  (Keyword : Order→OrderItem→Product→Category)
+             ════════════════════════════════════════════════════════════ -->
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <div class="mb-5">
+            <h2 class="text-xl font-bold text-forest-green flex items-center gap-2">
+              🔍 Orders by Category
+              <span class="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+          Keyword multi-table
+        </span>
+            </h2>
+            <p class="text-xs text-olive-green mt-0.5">
+              Order → OrderItem → Product → Category — filtered by status &amp; date range
+            </p>
+          </div>
+
+          <!-- Filter bar -->
+          <div class="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-5 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+
+              <!-- Category selector -->
+              <div>
+                <label class="block text-xs font-semibold text-indigo-700 mb-1">Category *</label>
+                <select [(ngModel)]="categoryOrderFilterCategoryId"
+                        class="w-full px-3 py-2 border border-indigo-200 rounded-lg bg-white text-sm">
+                  <option value="">— Select —</option>
+                  <option *ngFor="let cat of categories" [value]="cat.id">
+                    {{ cat.icon }} {{ cat.name }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Status -->
+              <div>
+                <label class="block text-xs font-semibold text-indigo-700 mb-1">Order Status</label>
+                <select [(ngModel)]="categoryOrderFilterStatus"
+                        class="w-full px-3 py-2 border border-indigo-200 rounded-lg bg-white text-sm">
+                  <option value="PENDING">Pending</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PROCESSING">Processing</option>
+                  <option value="SHIPPED">Shipped</option>
+                  <option value="DELIVERED">Delivered</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+
+              <!-- Start date -->
+              <div>
+                <label class="block text-xs font-semibold text-indigo-700 mb-1">From</label>
+                <input type="datetime-local"
+                       [(ngModel)]="categoryOrderFilterStartDate"
+                       class="w-full px-3 py-2 border border-indigo-200 rounded-lg bg-white text-sm">
+              </div>
+
+              <!-- End date -->
+              <div>
+                <label class="block text-xs font-semibold text-indigo-700 mb-1">To</label>
+                <input type="datetime-local"
+                       [(ngModel)]="categoryOrderFilterEndDate"
+                       class="w-full px-3 py-2 border border-indigo-200 rounded-lg bg-white text-sm">
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-3">
+              <button (click)="applyOrdersByCategoryFilter()"
+                      [disabled]="categoryOrdersLoading"
+                      class="bg-indigo-700 text-white px-6 py-2 rounded-lg hover:bg-indigo-800
+                       disabled:opacity-50 font-medium text-sm">
+                {{ categoryOrdersLoading ? '⏳ Loading...' : '🔍 Search Orders' }}
+              </button>
+              <button *ngIf="categoryOrdersApplied"
+                      (click)="resetOrdersByCategoryFilter()"
+                      class="px-5 bg-white border border-indigo-300 text-indigo-700 py-2
+                       rounded-lg hover:bg-indigo-50 text-sm">
+                ✕ Reset
+              </button>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div *ngIf="categoryOrdersApplied">
+            <!-- Result header -->
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-sm font-bold text-forest-green">
+                {{ categoryOrders.length }} order(s) found
+                <span class="font-normal text-olive-green">—</span>
+                <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-bold mx-1">
+            {{ categoryOrderFilterStatus }}
+          </span>
+                in category
+                <span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-bold mx-1">
+            {{ getCategoryNameById(categoryOrderFilterCategoryId) }}
+          </span>
+              </p>
+              <!-- Mini revenue total -->
+              <p *ngIf="categoryOrders.length > 0" class="text-sm font-bold text-green-600">
+                Total : {{ categoryOrders | sumBy:'totalAmount' | number:'1.2-2' }} DT
+              </p>
+            </div>
+
+            <!-- Empty state -->
+            <div *ngIf="categoryOrders.length === 0"
+                 class="text-center py-12 bg-gray-50 rounded-xl border border-gray-100">
+              <p class="text-4xl mb-2">🔍</p>
+              <p class="text-olive-green">No orders match this filter.</p>
+            </div>
+
+            <!-- Orders list -->
+            <div class="space-y-3">
+              <div *ngFor="let order of categoryOrders"
+                   class="flex justify-between items-center bg-gray-50 rounded-xl px-5 py-4
+                    border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div class="flex items-center gap-4">
+                  <div class="bg-indigo-100 rounded-lg p-2 text-xl">📋</div>
+                  <div>
+                    <p class="font-bold text-forest-green">Order #{{ order.id }}</p>
+                    <p class="text-xs text-olive-green font-mono">{{ order.orderNumber }}</p>
+                    <p class="text-xs text-olive-green">
+                      {{ order.createdAt | date:'dd/MM/yyyy HH:mm' }}
+                    </p>
+                  </div>
+                </div>
+
+                  <!-- Items preview -->
+                <!-- Items preview -->
+                <div class="hidden md:block max-w-xs">
+                  <div *ngFor="let item of $any(order.items) | slice:0:2"
+                       class="text-xs text-olive-green truncate">
+                    • {{ $any(item).productName }} ×{{ $any(item).quantity }}
+                  </div>
+                  <p *ngIf="$any(order.items)?.length > 2"
+                     class="text-xs text-indigo-500">
+                    +{{ $any(order.items).length - 2 }} more item(s)
+                  </p>
+                </div>
+
+                <!-- Right: amount + status -->
+                <div class="flex items-center gap-4">
+                  <div class="text-right">
+                    <p class="font-bold text-green-600 text-lg">
+                      {{ order.totalAmount | number:'1.2-2' }} DT
+                    </p>
+                    <p class="text-xs text-olive-green">{{ order.paymentMethod }}</p>
+                  </div>
+                  <span [class]="getOrderStatusBadge(order.status)"
+                        class="px-3 py-1 rounded-full text-xs font-bold">
+              {{ order.status }}
+            </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </main>
   </div>
