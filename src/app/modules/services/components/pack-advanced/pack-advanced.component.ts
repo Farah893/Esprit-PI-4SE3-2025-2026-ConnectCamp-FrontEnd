@@ -7,10 +7,12 @@ import { AiService, AiPackAdvisorResponse } from '../../../../services/ai.servic
 import { EonetService } from '../../../emergency/services/eonet.service';
 import { EonetEvent } from '../../../emergency/models/alerte.model';
 
+import { RouterLink } from '@angular/router';
+
 @Component({
     selector: 'app-pack-advanced',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, RouterLink],
     templateUrl: './pack-advanced.component.html',
     styleUrls: ['./pack-advanced.component.css']
 })

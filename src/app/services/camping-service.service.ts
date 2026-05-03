@@ -10,7 +10,7 @@ import { CampingService, CampingServiceRequest, ServiceMLResponse } from '../mod
 })
 export class CampingServiceService {
     private http = inject(HttpClient);
-    private apiUrl = `${environment.apiUrl}/camping-services`;
+    private apiUrl = `${environment.apiUrl}/api/camping-services`;
 
     getAllServices(page: number = 0, size: number = 10): Observable<any> {
         const params = new HttpParams()
@@ -64,32 +64,22 @@ export class CampingServiceService {
         return this.http.delete<any>(`${this.apiUrl}/${id}`);
     }
 
+    getAtRiskServices(): Observable<any[]> {
+        return this.http.get<any>(`${this.apiUrl}/analytics/at-risk`).pipe(
+            map(response => response.data || [])
+        );
+    }
+
     // ── ML Predictions ────────────────────────────────────────────────────
 
-    /** GET /api/camping-services/{id}/ml/predict — rating + demand depuis entité existante */
     predictForService(id: number): Observable<ServiceMLResponse> {
         return this.http.get<any>(`${this.apiUrl}/${id}/ml/predict`).pipe(
             map(response => response.data)
         );
     }
 
-    /** POST /api/camping-services/ml/predict — rating + demand combinés */
     predictFull(request: any): Observable<ServiceMLResponse> {
         return this.http.post<any>(`${this.apiUrl}/ml/predict`, request).pipe(
-            map(response => response.data)
-        );
-    }
-
-    /** POST /api/camping-services/ml/predict-rating */
-    predictRating(request: any): Observable<ServiceMLResponse> {
-        return this.http.post<any>(`${this.apiUrl}/ml/predict-rating`, request).pipe(
-            map(response => response.data)
-        );
-    }
-
-    /** POST /api/camping-services/ml/predict-demand */
-    predictDemand(request: any): Observable<ServiceMLResponse> {
-        return this.http.post<any>(`${this.apiUrl}/ml/predict-demand`, request).pipe(
             map(response => response.data)
         );
     }

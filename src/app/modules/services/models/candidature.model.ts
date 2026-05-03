@@ -23,6 +23,7 @@ export interface Candidature {
     scoreEvaluation?: number;
     aiCompatibilitySummary?: string;
     aiRecommendation?: string;
+    isSuspicious?: boolean;
 
     // Legacy fields for compatibility during transition
     userId?: string | number;

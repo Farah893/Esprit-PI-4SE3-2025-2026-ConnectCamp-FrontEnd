@@ -388,7 +388,8 @@ export class EventDetailComponent {
     }
 
     get isParticipant(): boolean {
-        return (this.authService.getCurrentUser()?.role as string) === 'PARTICIPANT';
+        const role = this.authService.getCurrentUser()?.role as string;
+        return role === 'PARTICIPANT' || role === 'CAMPER';
     }
 
     goToWorkAtEvent() {

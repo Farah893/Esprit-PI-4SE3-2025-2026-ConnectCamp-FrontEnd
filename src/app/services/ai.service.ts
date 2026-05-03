@@ -78,4 +78,11 @@ export class AiService {
             map(res => res.data)
         );
     }
+
+    evaluateCandidate(name: string, bio: string, serviceName: string, serviceDesc: string, eventTitle: string, eventDesc: string): Observable<any> {
+        const params = { name, bio, serviceName, serviceDesc, eventTitle, eventDesc };
+        return this.http.post<any>(`${this.base}/evaluate-candidate`, null, { params }).pipe(
+            map(res => res.data)
+        );
+    }
 }

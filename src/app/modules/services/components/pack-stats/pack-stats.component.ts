@@ -5,6 +5,7 @@ import { PackService } from '../../services/pack.service';
 import { Pack, PackServiceStats } from '../../models/pack.model';
 import { ServiceService } from '../../services/service.service';
 import { UserService } from '../../../../services/user.service';
+import { CartService } from '../../../../services/cart.service';
 
 const SERVICE_TYPES = [
     'TRANSPORT', 'CATERING', 'GUIDE', 'EQUIPMENT_RENTAL',
@@ -12,10 +13,12 @@ const SERVICE_TYPES = [
     'ANIMATION', 'ENTERTAINMENT', 'ACCOMMODATION', 'OTHER'
 ];
 
+import { RouterLink } from '@angular/router';
+
 @Component({
     selector: 'app-pack-stats',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, RouterLink],
     templateUrl: './pack-stats.component.html',
     styleUrls: ['./pack-stats.component.css']
 })
@@ -41,7 +44,8 @@ export class PackStatsComponent implements OnInit {
     constructor(
         private packService: PackService,
         private serviceService: ServiceService,
-        private userService: UserService
+        private userService: UserService,
+        private cartService: CartService
     ) {}
 
     isAdmin(): boolean {
@@ -103,5 +107,9 @@ export class PackStatsComponent implements OnInit {
                 this.atRiskLoading = false;
             }
         });
+    }
+
+    getImageUrl(imagePath: string | undefined): string {
+        return this.cartService.getImageUrl(imagePath);
     }
 }

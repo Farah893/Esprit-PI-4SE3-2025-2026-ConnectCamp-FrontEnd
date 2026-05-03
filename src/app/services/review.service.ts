@@ -49,7 +49,7 @@ export class ReviewService {
     }
 
     createServiceReview(serviceId: number, userId: number, review: any): Observable<any> {
-        return this.http.post<any>(`${environment.apiUrl}/api/service-reviews?serviceId=${serviceId}&userId=${userId}`, review).pipe(
+        return this.http.post<any>(`${environment.apiUrl}/api/service-reviews/service/${serviceId}?userId=${userId}`, review).pipe(
             map(response => response.data)
         );
     }

@@ -126,6 +126,7 @@ export class EventApplyComponent implements OnInit {
     }
 
     isParticipant(): boolean {
-        return this.userService.getLoggedInUser()?.role === 'PARTICIPANT';
+        const role = this.userService.getLoggedInUser()?.role;
+        return role === 'PARTICIPANT' || role === 'CAMPER';
     }
 }

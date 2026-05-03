@@ -14,7 +14,8 @@ export type UserRole =
   | 'ORGANIZER'
   | 'CAMPER'
   | 'SPONSOR'
-  | 'ADMIN';
+  | 'ADMIN'
+  | 'PARTICIPANT';
 
 export interface LoginRequest {
   email: string;
