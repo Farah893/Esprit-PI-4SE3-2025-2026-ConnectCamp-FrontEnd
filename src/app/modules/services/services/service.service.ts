@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map, defer, throwError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { Service } from '../models/service.model';
+import { ServiceMLResponse } from '../../../models/camping-service.model';
 
 @Injectable({
     providedIn: 'root'
@@ -102,6 +103,19 @@ export class ServiceService {
     getAvailable(): Observable<Service[]> {
         return this.http.get<Service[]>(`${this.apiUrl}/disponibles`);
     }
+    /** GET /api/camping-services/{id}/ml/predict — rating + demand (camper) */
+    predictForService(id: number): Observable<ServiceMLResponse> {
+        return this.http.get<any>(`${this.apiUrl}/${id}/ml/predict`).pipe(
+            map(response => response.data)
+        );
+    }
+
+    getAtRiskServices(): Observable<any[]> {
+        return this.http.get<any>(`${this.apiUrl}/analytics/at-risk`).pipe(
+            map(response => response.data)
+        );
+    }
+
     private mapToService(data: any): Service {
         if (!data) return {} as Service;
         const isOrg = data.isOrganizerService === true;

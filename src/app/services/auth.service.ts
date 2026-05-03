@@ -116,6 +116,13 @@ export class AuthService {
           return of(offlineAuth);
         }
 
+        // Extract field-level validation errors (from @Valid / @Pattern on DTO)
+        const fieldErrors = error.error?.data;
+        if (fieldErrors && typeof fieldErrors === 'object') {
+          const messages = Object.values(fieldErrors).join(' | ');
+          return throwError(() => new Error(messages));
+        }
+
         const msg = error.error?.message
           || error.error?.error
           || error.message

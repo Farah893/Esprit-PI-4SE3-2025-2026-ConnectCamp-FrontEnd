@@ -20,6 +20,9 @@ export interface Candidature {
     eventServiceId?: number;
     eventServiceName?: string;
     createdAt?: string;
+    scoreEvaluation?: number;
+    aiCompatibilitySummary?: string;
+    aiRecommendation?: string;
 
     // Legacy fields for compatibility during transition
     userId?: string | number;

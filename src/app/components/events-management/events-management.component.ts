@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { EventServiceEntityService } from '../../services/event-service-entity.service';
 import { environment } from '../../../environments/environment';
 import { EventDetailComponent, Event } from '../event-detail/event-detail.component';
 
@@ -19,12 +20,16 @@ export class EventsManagementComponent implements OnInit {
   private router = inject(Router);
   public authService = inject(AuthService);
   private cdr = inject(ChangeDetectorRef);
+  private assignmentService = inject(EventServiceEntityService);
   private apiUrl = environment.apiUrl;
 
   selectedEvent: Event | null = null;
   events: Event[] = [];
   recommendedEvents: Event[] = [];
   myEvents: Event[] = [];
+  recommendedServices: any[] = [];
+  recommendedPacks: any[] = [];
+  recsLoading: boolean = false;
   selectedCategory: string = 'all';
 
   isCreateModalOpen: boolean = false;
@@ -192,7 +197,31 @@ export class EventsManagementComponent implements OnInit {
 
   selectEvent(event: Event) {
     this.selectedEvent = event;
+    this.fetchRecommendations(event.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  fetchRecommendations(eventId: number) {
+    this.recsLoading = true;
+    this.recommendedServices = [];
+    this.recommendedPacks = [];
+    
+    // Fetch smart recommendations from the orchestrator
+    this.assignmentService.getRecommendedServices(eventId).subscribe({
+      next: (res) => {
+        this.recommendedServices = res.data || [];
+        this.recsLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: () => { this.recsLoading = false; }
+    });
+
+    this.assignmentService.getRecommendedPacks(eventId).subscribe({
+      next: (res) => {
+        this.recommendedPacks = res.data || [];
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   clearSelection() {

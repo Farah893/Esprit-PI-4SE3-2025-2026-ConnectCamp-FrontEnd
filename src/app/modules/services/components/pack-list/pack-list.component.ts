@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { PackService } from '../../services/pack.service';
 import { Pack } from '../../models/pack.model';
 import { ServiceService } from '../../services/service.service';
@@ -10,11 +11,13 @@ import { UserService } from '../../../../services/user.service';
 import { CartService } from '../../../../services/cart.service';
 import { CartItem } from '../../../../models/api.models';
 import { environment } from '../../../../../environments/environment';
+import { ReviewService } from '../../../../services/review.service';
+import { AiService } from '../../../../services/ai.service';
 
 @Component({
     selector: 'app-pack-list',
     standalone: true,
-    imports: [CommonModule, RouterLink],
+    imports: [CommonModule, FormsModule, RouterLink],
     templateUrl: './pack-list.component.html',
     styleUrls: ['./pack-list.component.css']
 })
@@ -24,12 +27,31 @@ export class PackListComponent implements OnInit {
     loading = false;
     error: string | null = null;
 
+    // AI Reputation State
+    reputationResults: Record<number, string> = {};
+    reputationLoading: Record<number, boolean> = {};
+
+    // Review Form State
+    showReviewFormId: number | null = null;
+    reviewData = {
+        rating: 5,
+        qualityRating: 5,
+        valueRating: 5,
+        pros: '',
+        cons: '',
+        comment: 'This bundle is excellent and provides great value.',
+        title: 'Great Bundle'
+    };
+    reviewLoading = false;
+
     constructor(
         private packService: PackService,
         private serviceService: ServiceService,
         private userService: UserService,
         private router: Router,
-        private cartService: CartService
+        private cartService: CartService,
+        private reviewService: ReviewService,
+        private aiService: AiService
     ) { }
 
     addToCart(pack: Pack): void {
@@ -163,5 +185,95 @@ export class PackListComponent implements OnInit {
 
     getImageUrl(imagePath: string | undefined): string {
         return this.cartService.getImageUrl(imagePath);
+    }
+
+    // ── Pack/Bundle Review Logic ──────────────────────────────────────
+    toggleReviewForm(packId: number): void {
+        if (this.showReviewFormId === packId) {
+            this.showReviewFormId = null;
+        } else {
+            this.showReviewFormId = packId;
+            this.reviewData = {
+                rating: 5,
+                qualityRating: 5,
+                valueRating: 5,
+                pros: '',
+                cons: '',
+                comment: 'This bundle is excellent and provides great value.',
+                title: 'Excellent Bundle'
+            };
+        }
+    }
+
+    submitPackReview(pack: Pack): void {
+        const user = this.userService.getLoggedInUser();
+        if (!user) {
+            alert('Please login to leave a review.');
+            return;
+        }
+
+        // Try to find a service ID to link the review to
+        let targetServiceId: number | undefined;
+
+        if (pack.serviceIds && pack.serviceIds.length > 0) {
+            targetServiceId = pack.serviceIds[0];
+        } else if (this.services && this.services.length > 0) {
+            // Fallback: Find a service that belongs to the same site (campsite)
+            const siteService = this.services.find(s => s.campingId === pack.siteId);
+            if (siteService) {
+                targetServiceId = siteService.id;
+            } else {
+                // Last resort: just use the first available service
+                targetServiceId = this.services[0].id;
+            }
+        }
+
+        if (!targetServiceId) {
+            alert('Could not find any associated services for this bundle to review.');
+            return;
+        }
+
+        this.reviewLoading = true;
+        const payload = {
+            rating: this.reviewData.rating,
+            qualityRating: this.reviewData.qualityRating,
+            valueRating: this.reviewData.valueRating,
+            title: this.reviewData.title,
+            comment: this.reviewData.comment,
+            pros: this.reviewData.pros.split(',').map(s => s.trim()).filter(s => s),
+            cons: this.reviewData.cons.split(',').map(s => s.trim()).filter(s => s)
+        };
+
+        this.reviewService.createServiceReview(targetServiceId, user.id, payload).subscribe({
+            next: () => {
+                alert('✨ Bundle sentiment saved! The AI Advisor will now prioritize this pack based on your feedback.');
+                this.showReviewFormId = null;
+                this.reviewLoading = false;
+            },
+            error: (err) => {
+                console.error('Error submitting bundle review', err);
+                alert(err.error?.message || 'Failed to submit review.');
+                this.reviewLoading = false;
+            }
+        });
+    }
+
+    generatePackReputation(packId: number): void {
+        this.reputationLoading[packId] = true;
+        this.reputationResults[packId] = '';
+        this.aiService.analyzePackReputation(packId).subscribe({
+            next: (result) => {
+                this.reputationResults[packId] = result;
+                this.reputationLoading[packId] = false;
+            },
+            error: () => {
+                this.reputationResults[packId] = 'AI analysis unavailable for this bundle.';
+                this.reputationLoading[packId] = false;
+            }
+        });
+    }
+
+    closeReputation(packId: number): void {
+        delete this.reputationResults[packId];
     }
 }

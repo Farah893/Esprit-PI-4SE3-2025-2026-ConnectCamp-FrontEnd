@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AlerteService } from '../../services/alerte.service';
+import { AiService, AiSitrepResponse } from '../../../../services/ai.service';
 import { Alerte } from '../../models/alerte.model';
 
 @Component({
@@ -19,14 +20,50 @@ export class AlerteDashboardComponent implements OnInit {
     activeFilter = 'ALL';
     searchTerm = '';
 
+    // --- AI SITREP ---
+    sitrepLoading = false;
+    sitrep: AiSitrepResponse | null = null;
+    sitrepError = false;
+
     get activeAlertsCount(): number {
         return this.alerts.filter(a => a.status === 'ACTIVE').length;
     }
 
-    constructor(private alerteService: AlerteService) { }
+    constructor(
+        private alerteService: AlerteService,
+        private aiService: AiService
+    ) { }
 
     ngOnInit(): void {
         this.loadAlerts();
+    }
+
+    generateSitrep(): void {
+        this.sitrepLoading = true;
+        this.sitrep = null;
+        this.sitrepError = false;
+        this.aiService.generateSitrep().subscribe({
+            next: (data) => { this.sitrep = data; this.sitrepLoading = false; },
+            error: () => { this.sitrepError = true; this.sitrepLoading = false; }
+        });
+    }
+
+    threatColor(level: string): string {
+        const map: Record<string, string> = {
+            SAFE: 'text-green-400', WATCH: 'text-amber-400',
+            DANGER: 'text-orange-400', CRITICAL: 'text-red-400'
+        };
+        return map[level] ?? 'text-gray-400';
+    }
+
+    threatBg(level: string): string {
+        const map: Record<string, string> = {
+            SAFE: 'from-green-900/40 to-green-800/20 border-green-700/30',
+            WATCH: 'from-amber-900/40 to-amber-800/20 border-amber-700/30',
+            DANGER: 'from-orange-900/40 to-orange-800/20 border-orange-700/30',
+            CRITICAL: 'from-red-900/40 to-red-800/20 border-red-700/30'
+        };
+        return map[level] ?? 'from-gray-900/40 to-gray-800/20 border-gray-700/30';
     }
 
     loadAlerts(): void {

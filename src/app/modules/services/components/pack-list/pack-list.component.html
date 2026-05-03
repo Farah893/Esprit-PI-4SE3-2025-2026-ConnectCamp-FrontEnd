@@ -1,9 +1,16 @@
 <div class="container mx-auto px-4 py-8">
     <!-- Admin Intelligence Header (Matching Services) -->
     <div *ngIf="isAdmin()" class="mb-10 space-y-6 animate-fade-in">
-        <div>
-            <h1 class="text-2xl font-black text-[#1a2e1a]">Bundles Intelligence</h1>
-            <p class="text-sm text-[#617152] font-medium">Management and performance metrics for your bundle offers.</p>
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-black text-[#1a2e1a]">Bundles Intelligence</h1>
+                <p class="text-sm text-[#617152] font-medium">Management and performance metrics for your bundle offers.</p>
+            </div>
+            <button routerLink="/admin/services/packs/stats"
+                class="bg-[#617152] hover:bg-[#1a2e1a] text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center gap-3">
+                <i class="fas fa-chart-line"></i>
+                Analytics Dashboard
+            </button>
         </div>
 
         <!-- Bundle Stats Grid -->
@@ -71,12 +78,19 @@
             <i class="fas fa-boxes mr-4 text-[#617152]"></i>
             Exclusive Bundles
         </h2>
-        <button *ngIf="isAdmin()"
-            class="bg-[#1a2e1a] hover:bg-black text-white px-8 py-3 rounded-2xl font-black shadow-xl transition-all flex items-center gap-2"
-            routerLink="/admin/services/packs/create">
-            <i class="fas fa-plus"></i>
-            New Bundle
-        </button>
+        <div class="flex gap-3">
+            <button *ngIf="!isAdmin()" routerLink="/services/packs/advanced"
+                class="bg-gradient-to-br from-violet-600 to-indigo-600 text-white px-5 py-3 rounded-2xl font-black shadow-xl transition-all hover:opacity-90 flex items-center gap-2 text-sm">
+                <i class="fas fa-robot"></i>
+                AI Pack Advisor
+            </button>
+            <button *ngIf="isAdmin()"
+                class="bg-[#1a2e1a] hover:bg-black text-white px-8 py-3 rounded-2xl font-black shadow-xl transition-all flex items-center gap-2"
+                routerLink="/admin/services/packs/create">
+                <i class="fas fa-plus"></i>
+                New Bundle
+            </button>
+        </div>
     </div>
 
     <!-- Loading State -->
@@ -189,8 +203,17 @@
                     <div *ngIf="isAdmin()" class="flex flex-col gap-2">
                         <div class="flex gap-2">
                             <button [routerLink]="['/admin/services/packs/edit', pack.id!]"
-                                class="flex-1 bg-[#1a2e1a] hover:bg-black text-white py-3 rounded-xl font-black text-xs transition-all uppercase shadow-md flex items-center justify-center gap-2">
-                                <i class="fas fa-edit"></i> Modify
+                                class="flex-1 bg-white border border-gray-200 hover:border-gray-400 text-[#1a2e1a] py-2.5 rounded-xl font-black text-[10px] transition-all uppercase shadow-sm flex items-center justify-center gap-2">
+                                <i class="fas fa-edit text-gray-500"></i> Modify
+                            </button>
+                            <button (click)="generatePackReputation(pack.id!)"
+                                class="flex-1 group relative overflow-hidden bg-white border border-[#617152]/30 hover:border-[#617152] text-[#1a2e1a] py-2.5 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md flex items-center justify-center gap-2">
+                                <div class="absolute inset-0 bg-gradient-to-r from-emerald-50 to-teal-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                <div class="relative flex items-center gap-2">
+                                    <i *ngIf="!reputationLoading[pack.id!]" class="fas fa-wand-magic-sparkles text-emerald-600 transition-transform group-hover:scale-110 group-hover:rotate-12"></i>
+                                    <i *ngIf="reputationLoading[pack.id!]" class="fas fa-circle-notch animate-spin text-emerald-600"></i>
+                                    <span class="text-[10px] font-black uppercase tracking-wider text-[#1a2e1a]/80 group-hover:text-[#1a2e1a]">AI Reputation</span>
+                                </div>
                             </button>
                             <button (click)="togglePackAvailability(pack)"
                                 [ngClass]="pack.available !== false ? 'bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'"
@@ -208,6 +231,21 @@
                             class="w-full bg-white border-2 border-dashed border-[#617152]/30 text-[#617152] hover:border-[#617152] hover:bg-gray-50 py-2.5 rounded-xl font-black text-xs transition-all uppercase">
                             <i class="fas fa-tag mr-2"></i> Quick Discount
                         </button>
+
+                        <!-- AI Reputation Result Display -->
+                        <div *ngIf="reputationResults[pack.id!]" 
+                             class="mt-2 p-4 rounded-xl bg-[#617152]/10 border border-[#617152]/30 text-[10px] text-[#1a2e1a] relative animate-in fade-in slide-in-from-top-2">
+                          <button (click)="closeReputation(pack.id!)" class="absolute top-2 right-2 text-[#1a2e1a]/40 hover:text-[#1a2e1a]">
+                            <i class="fas fa-times"></i>
+                          </button>
+                          <div class="flex items-center gap-2 mb-2 font-black uppercase tracking-widest text-[#617152]">
+                            <i class="fas fa-robot"></i>
+                            AI Bundle Insight
+                          </div>
+                          <div class="prose prose-sm prose-invert whitespace-pre-line leading-relaxed italic">
+                            {{ reputationResults[pack.id!] }}
+                          </div>
+                        </div>
                     </div>
 
                     <!-- User Actions: Add to Cart -->
@@ -222,6 +260,55 @@
                         class="w-full bg-[#617152] hover:bg-[#1a2e1a] text-white py-3 rounded-xl font-black text-xs transition-all uppercase shadow-md flex items-center justify-center gap-2">
                         <i class="fas fa-handshake"></i> {{ isCamper() ? 'Add to Stay' : 'Apply for Task' }}
                     </button>
+
+                    <!-- AI Bundle Sentiment Review — Participant/Camper only -->
+                    <div *ngIf="isParticipant()" class="mt-1">
+                        <button (click)="toggleReviewForm(pack.id!)"
+                            class="w-full py-2.5 bg-white border-2 border-[#1a2e1a] text-[#1a2e1a] hover:bg-[#1a2e1a] hover:text-white rounded-xl font-black text-[10px] transition-all uppercase flex items-center justify-center gap-2">
+                            <i class="fas fa-magic"></i>
+                            {{ showReviewFormId === pack.id ? 'Cancel' : 'Review Bundle & Sentiment' }}
+                        </button>
+
+                        <!-- Inline Review Form -->
+                        <div *ngIf="showReviewFormId === pack.id" class="mt-4 p-4 bg-amber-50/50 rounded-2xl border border-amber-100 animate-fade-in space-y-4">
+                            <div class="grid grid-cols-3 gap-2">
+                                <div class="text-center">
+                                    <label class="text-[8px] font-black uppercase text-gray-400 block mb-1">Global</label>
+                                    <input type="number" [(ngModel)]="reviewData.rating" min="1" max="5" class="w-full p-2 rounded-lg text-center border text-xs">
+                                </div>
+                                <div class="text-center">
+                                    <label class="text-[8px] font-black uppercase text-gray-400 block mb-1">Quality</label>
+                                    <input type="number" [(ngModel)]="reviewData.qualityRating" min="1" max="5" class="w-full p-2 rounded-lg text-center border text-xs">
+                                </div>
+                                <div class="text-center">
+                                    <label class="text-[8px] font-black uppercase text-gray-400 block mb-1">Value</label>
+                                    <input type="number" [(ngModel)]="reviewData.valueRating" min="1" max="5" class="w-full p-2 rounded-lg text-center border text-xs">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-[9px] font-bold text-gray-500 block mb-1">PROS (split with comma)</label>
+                                <input type="text" [(ngModel)]="reviewData.pros" placeholder="Secure, Complete, Fast" class="w-full p-2 rounded-lg border text-xs">
+                            </div>
+
+                            <div>
+                                <label class="text-[9px] font-bold text-gray-500 block mb-1">CONS (split with comma)</label>
+                                <input type="text" [(ngModel)]="reviewData.cons" placeholder="A bit expensive" class="w-full p-2 rounded-lg border text-xs">
+                            </div>
+
+                            <div>
+                                <label class="text-[9px] font-bold text-gray-500 block mb-1">DETAILED COMMENT</label>
+                                <textarea [(ngModel)]="reviewData.comment" rows="2" 
+                                    class="w-full p-2 rounded-lg border text-xs" 
+                                    placeholder="Tell us more about your experience..."></textarea>
+                            </div>
+
+                            <button (click)="submitPackReview(pack)" [disabled]="reviewLoading"
+                                class="w-full bg-[#1a2e1a] text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg hover:bg-black transition-all">
+                                {{ reviewLoading ? 'Saving...' : '✨ Update AI Advisor' }}
+                            </button>
+                        </div>
+                    </div>
 
                     <!-- Other View Only -->
                     <div *ngIf="!isAdmin() && !isUser() && !isParticipant()"

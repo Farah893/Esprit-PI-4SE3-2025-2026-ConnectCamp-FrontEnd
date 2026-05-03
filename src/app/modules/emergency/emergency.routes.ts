@@ -3,6 +3,8 @@ import { AlerteListComponent } from './components/alerte-list/alerte-list.compon
 import { AlerteCreateComponent } from './components/alerte-create/alerte-create.component';
 import { AlerteDetailComponent } from './components/alerte-detail/alerte-detail.component';
 import { AlerteDashboardComponent } from './components/alerte-dashboard/alerte-dashboard.component';
+import { AlerteStatsComponent } from './components/alerte-stats/alerte-stats.component';
+import { AlerteAdvancedComponent } from './components/alerte-advanced/alerte-advanced.component';
 import { ProtocoleListComponent } from './components/protocole-list/protocole-list.component';
 import { ProtocoleCreateComponent } from './components/protocole-create/protocole-create.component';
 import { ProtocoleEditComponent } from './components/protocole-edit/protocole-edit.component';
@@ -15,7 +17,9 @@ import { AdminGuard, CamperGuard } from '../../guards/role.guard';
 export const EMERGENCY_ROUTES: Routes = [
     { path: '', redirectTo: 'list', pathMatch: 'full' },
     { path: 'list', component: AlerteListComponent }, // Campers and Admins can view this
-    { path: 'dashboard', component: AlerteDashboardComponent, canActivate: [AdminGuard] }, // Admin view
+    { path: 'dashboard', component: AlerteDashboardComponent, canActivate: [AdminGuard] },
+    { path: 'stats', component: AlerteStatsComponent, canActivate: [AdminGuard] },
+    { path: 'advanced', component: AlerteAdvancedComponent, canActivate: [AdminGuard] },
     { path: 'create', component: AlerteCreateComponent, canActivate: [CamperGuard] },
     { path: 'detail/:id', component: AlerteDetailComponent }, // Detail can have internal checks
 

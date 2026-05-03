@@ -41,6 +41,19 @@ export class ReviewService {
         );
     }
 
+    /** Service Reviews (AI Sentiment) */
+    getReviewsByService(serviceId: number): Observable<any[]> {
+        return this.http.get<any>(`${environment.apiUrl}/api/service-reviews/service/${serviceId}`).pipe(
+            map(response => response.data.content || [])
+        );
+    }
+
+    createServiceReview(serviceId: number, userId: number, review: any): Observable<any> {
+        return this.http.post<any>(`${environment.apiUrl}/api/service-reviews?serviceId=${serviceId}&userId=${userId}`, review).pipe(
+            map(response => response.data)
+        );
+    }
+
     createReview(siteId: number, review: Partial<Review>): Observable<Review> {
         return this.http.post<ReviewApiResponse>(`${this.apiUrl}/site/${siteId}`, this.toApi(siteId, review)).pipe(
             map((created) => this.fromApi(created, siteId))

@@ -7,12 +7,11 @@ import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 import { EventServiceEntity } from '../../models/event-service-entity.model';
 import { RecommendationService, RecommendationResult } from '../../services/recommendation.service';
-
+import { EventServiceEntityService } from '../../services/event-service-entity.service';
 import { CartService } from '../../services/cart.service';
 import { CartItem } from '../../models/api.models';
+
 export interface Event {
-
-
     id: number;
     title: string;
     type: 'workshop' | 'trip' | 'festival';
@@ -48,14 +47,20 @@ export class EventDetailComponent {
     private router = inject(Router);
     public authService = inject(AuthService);
     private cdr = inject(ChangeDetectorRef);
+    private smartService = inject(EventServiceEntityService);
+    private recommendationService = inject(RecommendationService);
+    private cartService = inject(CartService);
 
     requestedServices: EventServiceEntity[] = [];
+    recommendedServices: any[] = [];
+    recommendedPacks: any[] = [];
     servicesLoading = false;
-  recommendations: RecommendationResult | null = null;
-  recommendationsLoading = false;
-  recommendationsError = '';
-  private recommendationService = inject(RecommendationService);
-  private cartService = inject(CartService);
+    
+    recommendations: RecommendationResult | null = null;
+    recommendationsLoading = false;
+    recommendationsError = '';
+    recsLoading = false;
+
     newComment: string = '';
     newCommentRating: number = 0;
     userRating: number = 0;
@@ -68,13 +73,11 @@ export class EventDetailComponent {
     errorMessage: string = '';
     isProcessing: boolean = false;
 
-    // Track current user's reaction
     userLiked: boolean = false;
     userDisliked: boolean = false;
 
     private apiUrl = environment.apiUrl;
     @Input() set event(value: Event | null) {
-        // Clone the object to avoid mutating the parent's state (fixes NG0100)
         const clonedValue = value ? { ...value } : null;
 
         if (clonedValue && clonedValue.image && !clonedValue.image.startsWith('http') && !clonedValue.image.startsWith('blob')) {
@@ -92,7 +95,6 @@ export class EventDetailComponent {
             );
         }
         this._event = clonedValue;
-        // Reset reaction state each time a new event is opened
         this.userLiked = false;
         this.userDisliked = false;
         this.requestedServices = [];
@@ -101,7 +103,7 @@ export class EventDetailComponent {
             this.loadUserReaction();
             this.loadRequestedServices();
             this.loadRecommendations();
-
+            this.loadSmartRecommendations();
         }
     }
     get event(): Event | null { return this._event; }
@@ -121,7 +123,6 @@ export class EventDetailComponent {
         this.back.emit();
     }
 
-    // Role & Ownership Checks
     get canManage(): boolean {
         const user = this.authService.getCurrentUser();
         if (!user || user.role !== 'ORGANIZER' || !this.event) return false;
@@ -131,17 +132,16 @@ export class EventDetailComponent {
     get isOrganizer(): boolean {
         return this.authService.getCurrentUser()?.role === 'ORGANIZER';
     }
-  getProductImage(productName: string): string {
-    const keywords = ['outdoor', 'sport', 'gear', 'adventure', 'equipment', 'hiking', 'nature'];
-    const keyword = keywords[Math.floor(Math.random() * keywords.length)];
-    const seed = productName.replace(/\s+/g, '-').toLowerCase();
-    return `https://picsum.photos/seed/${seed}/400/200`;
-  }
-    // Readonly rating derived from backend (likes/dislikes → rating field)
+
+    getProductImage(productName: string): string {
+        const keywords = ['outdoor', 'sport', 'gear', 'adventure', 'equipment', 'hiking', 'nature'];
+        const keyword = keywords[Math.floor(Math.random() * keywords.length)];
+        const seed = productName.replace(/\s+/g, '-').toLowerCase();
+        return `https://picsum.photos/seed/${seed}/400/200`;
+    }
+
     get displayRating(): number {
-        if (!this.event || this.event.rating == null) {
-            return 0;
-        }
+        if (!this.event || this.event.rating == null) return 0;
         return Number(this.event.rating);
     }
 
@@ -152,7 +152,6 @@ export class EventDetailComponent {
         return 0;
     }
 
-    // Management Actions
     editEvent() {
         if (!this.event) return;
         this.edit.emit(this.event);
@@ -185,7 +184,6 @@ export class EventDetailComponent {
         }
     }
 
-    // Interactions
     private loadUserReaction() {
         if (!this._event || !this.authService.isAuthenticated()) return;
         const userId = this.authService.getCurrentUser()?.id;
@@ -198,7 +196,7 @@ export class EventDetailComponent {
                 this.userDisliked = res.disliked === true;
                 this.cdr.detectChanges();
             },
-            error: () => { /* ignore, keep defaults */ }
+            error: () => { /* ignore */ }
         });
     }
 
@@ -213,7 +211,6 @@ export class EventDetailComponent {
         if (!userId) return;
 
         this.isProcessing = true;
-        // Optimistic update
         const originalLiked = this.userLiked;
         const originalDisliked = this.userDisliked;
 
@@ -256,7 +253,6 @@ export class EventDetailComponent {
         if (!userId) return;
 
         this.isProcessing = true;
-        // Optimistic update
         const originalLiked = this.userLiked;
         const originalDisliked = this.userDisliked;
 
@@ -305,10 +301,8 @@ export class EventDetailComponent {
             rating: rating,
             comment: 'Note via interface event-detail'
         };
-        // Expects userId as RequestParam in GeneralReviewController
         this.http.post(`${this.apiUrl}/api/general-reviews?userId=${userId}`, payload).subscribe({
             next: () => {
-                console.log(`Rated event ${this.event?.id} with ${rating} stars`);
                 this.refreshEventData();
             },
             error: (err) => console.error('Rating failed', err)
@@ -320,7 +314,6 @@ export class EventDetailComponent {
         const commentText = this.newComment.trim();
         const ratingVal = this.newCommentRating;
 
-        // If neither comment text nor rating is provided, do nothing
         if (!commentText && ratingVal === 0) return;
 
         if (!this.authService.isAuthenticated()) {
@@ -332,7 +325,6 @@ export class EventDetailComponent {
         this.isProcessing = true;
         const userId = this.authService.getCurrentUser()?.id;
 
-        // Use GeneralReview endpoint which supports both rating and comment text
         const payload = {
             targetType: 'EVENT',
             targetId: this.event.id,
@@ -372,6 +364,29 @@ export class EventDetailComponent {
         });
     }
 
+    loadSmartRecommendations() {
+        if (!this._event) return;
+        this.recsLoading = true;
+        this.recommendedServices = [];
+        this.recommendedPacks = [];
+
+        this.smartService.getRecommendedServices(this._event.id).subscribe({
+            next: (res) => {
+                this.recommendedServices = res.data || [];
+                this.recsLoading = false;
+                this.cdr.detectChanges();
+            },
+            error: () => { this.recsLoading = false; }
+        });
+
+        this.smartService.getRecommendedPacks(this._event.id).subscribe({
+            next: (res) => {
+                this.recommendedPacks = res.data || [];
+                this.cdr.detectChanges();
+            }
+        });
+    }
+
     get isParticipant(): boolean {
         return (this.authService.getCurrentUser()?.role as string) === 'PARTICIPANT';
     }
@@ -388,10 +403,8 @@ export class EventDetailComponent {
     public comments: any[] = [];
     loadComments() {
         if (!this.event) return;
-        // Fetch from general-reviews endpoint instead of comments
         this.http.get<any>(`${this.apiUrl}/api/general-reviews/EVENT/${this.event.id}?size=100&sort=createdAt,desc`).subscribe({
             next: (res) => {
-                // PageResponse wrapped in ApiResponse
                 const pageData = res.data || res;
                 this.comments = pageData.content || pageData;
             },
@@ -456,19 +469,12 @@ export class EventDetailComponent {
         this.http.get<any>(`${this.apiUrl}/api/events/${this.event.id}`).subscribe({
             next: (res) => {
                 const refreshedEvent = res.data || res;
-                // Merge refreshed data into current event to preserve UI state if needed
                 if (this._event) {
                     this._event.likesCount = refreshedEvent.likesCount;
                     this._event.dislikesCount = refreshedEvent.dislikesCount;
                     this._event.participants = refreshedEvent.currentParticipants || refreshedEvent.participants;
-                    // Actualiser la note si elle est présente dans la réponse
-                    if (refreshedEvent.rating !== undefined) {
-                        this._event.rating = refreshedEvent.rating;
-                    }
-                    if (refreshedEvent.gamifications !== undefined) {
-                        this._event.gamifications = refreshedEvent.gamifications;
-                    }
-                    // Force Angular change detection so the updated counts render immediately
+                    if (refreshedEvent.rating !== undefined) this._event.rating = refreshedEvent.rating;
+                    if (refreshedEvent.gamifications !== undefined) this._event.gamifications = refreshedEvent.gamifications;
                     this.cdr.detectChanges();
                 }
             },
@@ -476,36 +482,35 @@ export class EventDetailComponent {
         });
     }
 
-  loadRecommendations() {
-    if (!this._event) return;
-    this.recommendationsLoading = true;
-    this.recommendationsError = '';
-    this.recommendations = null;
+    loadRecommendations() {
+        if (!this._event) return;
+        this.recommendationsLoading = true;
+        this.recommendationsError = '';
+        this.recommendations = null;
 
-    this.recommendationService.getRecommendations(this._event.id).subscribe({
-      next: (res) => {
-        this.recommendations = res;
-        this.recommendationsLoading = false;
-        this.cdr.detectChanges();
-      },
-      error: () => {
-        this.recommendationsError = 'Could not load recommendations.';
-        this.recommendationsLoading = false;
-      }
-    });
-  }
+        this.recommendationService.getRecommendations(this._event.id).subscribe({
+            next: (res) => {
+                this.recommendations = res;
+                this.recommendationsLoading = false;
+                this.cdr.detectChanges();
+            },
+            error: () => {
+                this.recommendationsError = 'Could not load recommendations.';
+                this.recommendationsLoading = false;
+            }
+        });
+    }
 
-  addRecommendedToCart(product: any) {
-    const item: CartItem = {
-      productId: String(product.productId),
-      productName: product.productName,
-      price: product.price,
-      quantity: 1,
-      image: '',
-      type: 'PURCHASE'
-    };
-    this.cartService.addToCart(item).subscribe();
-    // Toast feedback
-    alert(`✅ "${product.productName}" added to cart!`);
-  }
+    addRecommendedToCart(product: any) {
+        const item: CartItem = {
+            productId: String(product.productId),
+            productName: product.productName,
+            price: product.price,
+            quantity: 1,
+            image: '',
+            type: 'PURCHASE'
+        };
+        this.cartService.addToCart(item).subscribe();
+        alert(`✅ "${product.productName}" added to cart!`);
+    }
 }

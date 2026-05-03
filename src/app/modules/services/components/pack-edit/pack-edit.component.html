@@ -54,7 +54,29 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-black text-forest mb-2">Description *</label>
+                            <label class="block text-sm font-black text-forest mb-2">Target Camping Site *</label>
+                            <select formControlName="siteId"
+                                class="w-full px-5 py-4 rounded-2xl border border-gray-100 bg-cream/20 focus:bg-white focus:border-olive transition-all outline-none appearance-none cursor-pointer"
+                                [ngClass]="{'border-red-300': submitted && packForm.get('siteId')?.invalid}">
+                                <option [ngValue]="null">Select a site...</option>
+                                <option *ngFor="let site of sites" [value]="site.id">
+                                    {{ site.name }} ({{ site.city }})
+                                </option>
+                            </select>
+                            <p *ngIf="submitted && packForm.get('siteId')?.invalid" class="text-red-500 text-[10px] mt-1 font-bold">Please select a site to enable location-based AI features.</p>
+                        </div>
+
+                        <div class="relative">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-sm font-black text-forest">Description *</label>
+                                <button type="button" (click)="generateAIDescription()" 
+                                    class="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full bg-forest text-sage hover:bg-olive hover:text-white transition-all flex items-center gap-2 disabled:opacity-50"
+                                    [disabled]="isGeneratingAI">
+                                    <i *ngIf="!isGeneratingAI" class="fas fa-sparkles"></i>
+                                    <i *ngIf="isGeneratingAI" class="fas fa-circle-notch animate-spin"></i>
+                                    {{ isGeneratingAI ? 'Generating...' : 'Magic Draft ✨' }}
+                                </button>
+                            </div>
                             <textarea formControlName="description" rows="4"
                                 placeholder="Tell campers why this bundle is special..."
                                 class="w-full px-5 py-4 rounded-2xl border border-gray-100 bg-cream/20 focus:bg-white focus:border-olive transition-all outline-none resize-none"

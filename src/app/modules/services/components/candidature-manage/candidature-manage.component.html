@@ -17,8 +17,10 @@
                     <tr class="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-sage/10">
                         <th class="px-6 py-4">Applicant</th>
                         <th class="px-6 py-4">ServiceRequested</th>
+                        <th class="px-6 py-4">AI Insight</th>
                         <th class="px-6 py-4">Date</th>
                         <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4">AI Trust Guard</th>
                         <th class="px-6 py-4 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -30,16 +32,43 @@
                                     class="w-10 h-10 rounded-full bg-sage text-forest flex items-center justify-center font-black">
                                     {{ (entry.candidatName || 'U').charAt(0).toUpperCase() }}
                                 </div>
-                                <span class="font-bold text-forest">{{ entry.candidatName || 'User #' + entry.candidatId
-                                    }}</span>
-                                <div *ngIf="entry.notesEvaluation" class="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-100 italic text-xs text-sage">
-                                    "{{ entry.notesEvaluation }}"
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-forest">{{ entry.candidatName || 'User #' + entry.candidatId }}</span>
+                                    <span class="text-[10px] text-gray-400">{{ entry.numeroCandidature }}</span>
                                 </div>
                             </div>
                         </td>
                         <td class="px-6 py-6 border-b border-sage/5">
                             <span class="bg-olive/10 text-olive px-3 py-1 rounded-lg text-xs font-black">{{
                                 entry.eventServiceName || 'Role' }}</span>
+                        </td>
+                        <td class="px-6 py-6 border-b border-sage/5">
+                            <div class="flex flex-col gap-1">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-12 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full transition-all duration-1000" 
+                                             [style.width.%]="entry.scoreEvaluation || 50"
+                                             [ngClass]="{
+                                                'bg-red-500': (entry.scoreEvaluation || 0) < 40,
+                                                'bg-orange-400': (entry.scoreEvaluation || 0) >= 40 && (entry.scoreEvaluation || 0) < 70,
+                                                'bg-green-500': (entry.scoreEvaluation || 0) >= 70
+                                             }"></div>
+                                    </div>
+                                    <span class="text-[10px] font-black" 
+                                          [ngClass]="{
+                                            'text-red-500': (entry.scoreEvaluation || 0) < 40,
+                                            'text-orange-400': (entry.scoreEvaluation || 0) >= 40 && (entry.scoreEvaluation || 0) < 70,
+                                            'text-green-600': (entry.scoreEvaluation || 0) >= 70
+                                          }">{{ entry.scoreEvaluation || '??' }}%</span>
+                                </div>
+                                <span class="text-[9px] font-black uppercase tracking-tighter"
+                                      [ngClass]="{'text-green-600': entry.aiRecommendation === 'HIRE', 'text-orange-400': entry.aiRecommendation === 'INTERVIEW', 'text-red-400': entry.aiRecommendation === 'REJECT'}">
+                                    AI: {{ entry.aiRecommendation || 'ANALYZING...' }}
+                                </span>
+                                <p *ngIf="entry.aiCompatibilitySummary" class="text-[9px] text-gray-400 leading-tight max-w-[150px] italic">
+                                    "{{ (entry.aiCompatibilitySummary.length > 60) ? (entry.aiCompatibilitySummary | slice:0:60) + '...' : entry.aiCompatibilitySummary }}"
+                                </p>
+                            </div>
                         </td>
                         <td class="px-6 py-6 border-b border-sage/5">
                             <span class="text-xs font-medium text-gray-500">{{ entry.createdAt | date:'shortDate'
@@ -53,6 +82,25 @@
                     }">
                                 {{ entry.statut }}
                             </span>
+                        </td>
+                        <td class="px-6 py-6 border-b border-sage/5">
+                            <div *ngIf="!fraudStatuses[entry.id!]" (click)="checkFraud(entry)"
+                                class="cursor-pointer px-3 py-1.5 rounded-lg bg-olive/10 border border-olive/20 text-[10px] font-black text-olive hover:bg-olive hover:text-white transition-all flex items-center gap-2">
+                                <i class="fas fa-shield-halved"></i>
+                                Scan Bio
+                            </div>
+                            <div *ngIf="fraudStatuses[entry.id!] === 'checking'" class="flex items-center gap-2 text-[10px] text-olive font-black animate-pulse">
+                                <i class="fas fa-circle-notch animate-spin"></i>
+                                Verifying...
+                            </div>
+                            <div *ngIf="fraudStatuses[entry.id!] === 'fraud'" class="px-3 py-1.5 rounded-lg bg-red-100 border border-red-200 text-[10px] font-black text-red-500 flex items-center gap-2">
+                                <i class="fas fa-triangle-exclamation"></i>
+                                Suspicious
+                            </div>
+                            <div *ngIf="fraudStatuses[entry.id!] === 'safe'" class="px-3 py-1.5 rounded-lg bg-green-100 border border-green-200 text-[10px] font-black text-green-600 flex items-center gap-2">
+                                <i class="fas fa-check-double"></i>
+                                Trusted
+                            </div>
                         </td>
                         <td class="px-6 py-6 border-b border-sage/5 text-right">
                             <div *ngIf="entry.statut === 'EN_ATTENTE'" class="flex justify-end gap-2">

@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { PromotionService } from '../../services/promotion.service';
 import { Promotion } from '../../models/promotion.model';
 import { UserService } from '../../../../services/user.service';
@@ -16,10 +16,12 @@ export class PromotionListComponent implements OnInit {
     promotions: Promotion[] = [];
     loading = false;
     error: string | null = null;
+    copiedCodeId: number | null = null;
 
     constructor(
         private promotionService: PromotionService,
-        private userService: UserService
+        private userService: UserService,
+        private router: Router
     ) { }
 
     ngOnInit(): void {
@@ -68,6 +70,19 @@ export class PromotionListComponent implements OnInit {
                 }
             });
         }
+    }
+
+    copyCode(promo: Promotion): void {
+        const code = promo.code || promo.name;
+        navigator.clipboard.writeText(code).then(() => {
+            this.copiedCodeId = promo.id!;
+            setTimeout(() => { this.copiedCodeId = null; }, 2000);
+        });
+    }
+
+    goToPacks(promoCode?: string): void {
+        const extras = promoCode ? { queryParams: { code: promoCode } } : {};
+        this.router.navigate(['/services/packs'], extras);
     }
 
     isExpired(promotion: Promotion): boolean {

@@ -10,6 +10,7 @@ import { Promotion } from '../models/promotion.model';
 })
 export class PromotionService {
     private apiUrl = `${environment.apiUrl}/api/promotions`;
+    private cartApiUrl = `${environment.apiUrl}/api/cart`;
 
     constructor(private http: HttpClient) { }
 
@@ -38,8 +39,24 @@ export class PromotionService {
         );
     }
 
-    validateCode(code: string, amount: number): Observable<any> {
-        return this.http.get(`${this.apiUrl}/valider?code=${code}&montant=${amount}`);
+    validateCode(code: string, amount: number, userId?: number): Observable<any> {
+        let url = `${this.apiUrl}/validate?code=${encodeURIComponent(code)}&montant=${amount}`;
+        if (userId) url += `&userId=${userId}`;
+        return this.http.post<any>(url, {}).pipe(
+            map(response => response?.data ?? response)
+        );
+    }
+
+    applyToCart(userId: number, code: string): Observable<any> {
+        return this.http.post<any>(
+            `${this.cartApiUrl}/${userId}/promo?code=${encodeURIComponent(code)}`, {}
+        ).pipe(map(response => response?.data ?? response));
+    }
+
+    removeFromCart(userId: number): Observable<any> {
+        return this.http.delete<any>(
+            `${this.cartApiUrl}/${userId}/promo`
+        ).pipe(map(response => response?.data ?? response));
     }
 
     getById(id: number): Observable<Promotion> {

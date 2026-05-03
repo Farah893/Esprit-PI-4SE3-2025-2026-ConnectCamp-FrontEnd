@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
-import { CampingService, CampingServiceRequest } from '../models/camping-service.model';
+import { CampingService, CampingServiceRequest, ServiceMLResponse } from '../models/camping-service.model';
 
 @Injectable({
     providedIn: 'root'
@@ -61,5 +62,35 @@ export class CampingServiceService {
 
     deleteService(id: number): Observable<any> {
         return this.http.delete<any>(`${this.apiUrl}/${id}`);
+    }
+
+    // ── ML Predictions ────────────────────────────────────────────────────
+
+    /** GET /api/camping-services/{id}/ml/predict — rating + demand depuis entité existante */
+    predictForService(id: number): Observable<ServiceMLResponse> {
+        return this.http.get<any>(`${this.apiUrl}/${id}/ml/predict`).pipe(
+            map(response => response.data)
+        );
+    }
+
+    /** POST /api/camping-services/ml/predict — rating + demand combinés */
+    predictFull(request: any): Observable<ServiceMLResponse> {
+        return this.http.post<any>(`${this.apiUrl}/ml/predict`, request).pipe(
+            map(response => response.data)
+        );
+    }
+
+    /** POST /api/camping-services/ml/predict-rating */
+    predictRating(request: any): Observable<ServiceMLResponse> {
+        return this.http.post<any>(`${this.apiUrl}/ml/predict-rating`, request).pipe(
+            map(response => response.data)
+        );
+    }
+
+    /** POST /api/camping-services/ml/predict-demand */
+    predictDemand(request: any): Observable<ServiceMLResponse> {
+        return this.http.post<any>(`${this.apiUrl}/ml/predict-demand`, request).pipe(
+            map(response => response.data)
+        );
     }
 }

@@ -2,7 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AlerteService } from '../../services/alerte.service';
-import { Alerte } from '../../models/alerte.model';
+import { EonetService } from '../../services/eonet.service';
+import { AiService, AiPackAdvisorResponse } from '../../../../services/ai.service';
+import { Alerte, EonetEvent } from '../../models/alerte.model';
 import { UserService } from '../../../../services/user.service';
 
 @Component({
@@ -18,9 +20,20 @@ export class AlerteListComponent implements OnInit {
     myAlerts: Alerte[] = [];
     loading = false;
 
+    // --- AI Safety Brief (camper only) ---
+    briefLoading = false;
+    briefReady = false;
+    briefError = false;
+    nearbyEvents: EonetEvent[] = [];
+    aiBrief: AiPackAdvisorResponse | null = null;
+    userLat: number | null = null;
+    userLon: number | null = null;
+
     constructor(
         private userService: UserService,
-        private alerteService: AlerteService
+        private alerteService: AlerteService,
+        private eonetService: EonetService,
+        private aiService: AiService
     ) { }
 
     ngOnInit(): void {
@@ -30,7 +43,66 @@ export class AlerteListComponent implements OnInit {
 
         if (this.isCamper) {
             this.loadMyAlerts();
+            this.loadAiSafetyBrief();
         }
+    }
+
+    /** Flux automatique : GPS → EONET → IA — aucune action requise du camper */
+    private loadAiSafetyBrief(): void {
+        if (!navigator.geolocation) { this.briefReady = true; return; }
+        this.briefLoading = true;
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                this.userLat = pos.coords.latitude;
+                this.userLon = pos.coords.longitude;
+
+                this.eonetService.getNearbyEvents(this.userLat, this.userLon).subscribe({
+                    next: (events) => {
+                        this.nearbyEvents = events;
+
+                        if (events.length === 0) {
+                            // Aucun événement → zone sûre, pas besoin d'appeler l'IA
+                            this.briefReady = true;
+                            this.briefLoading = false;
+                            return;
+                        }
+
+                        // Construire le prompt contextuel automatiquement
+                        const eventSummary = events
+                            .map(e => `${this.eonetService.categoryIcon(this.eonetService.getFirstCategoryId(e))} ${e.title} (${e.categories[0]?.title ?? 'Unknown'})`)
+                            .join(', ');
+
+                        const worstSeverity = this.eonetService.mapCategoryToSeverity(
+                            this.eonetService.getFirstCategoryId(events[0])
+                        );
+
+                        this.aiService.advisePacks({
+                            userQuery: `I am a camper. NASA EONET detected these natural events within 500 km of my location: ${eventSummary}. What safety pack should I choose and what precautions should I take right now?`,
+                            eonetEvents: events.map(e => e.title),
+                            siteRiskLevel: worstSeverity
+                        }).subscribe({
+                            next: (brief) => {
+                                this.aiBrief = brief;
+                                this.briefReady = true;
+                                this.briefLoading = false;
+                            },
+                            error: () => {
+                                this.briefError = true;
+                                this.briefLoading = false;
+                            }
+                        });
+                    },
+                    error: () => { this.briefReady = true; this.briefLoading = false; }
+                });
+            },
+            () => { this.briefReady = true; this.briefLoading = false; },
+            { enableHighAccuracy: true, timeout: 6000 }
+        );
+    }
+
+    eonetIcon(evt: EonetEvent): string {
+        return this.eonetService.categoryIcon(this.eonetService.getFirstCategoryId(evt));
     }
 
     loadMyAlerts(): void {

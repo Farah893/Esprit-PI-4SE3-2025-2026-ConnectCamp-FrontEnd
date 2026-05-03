@@ -240,21 +240,44 @@
         <!-- Actions -->
         <div class="flex flex-col gap-3 mt-auto pt-4 border-t border-gray-100">
           <!-- Admin Actions -->
-          <div *ngIf="isAdmin()" class="flex gap-2">
-            <button [routerLink]="['/admin/services/edit', service.id]"
-              class="flex-1 bg-forest hover:bg-black text-cream py-2.5 rounded-xl font-bold text-xs transition-all uppercase shadow-sm">
-              <i class="fas fa-edit mr-1"></i> Modify
-            </button>
-            <button (click)="toggleServiceAvailability(service)"
-              [ngClass]="service.isActive !== false ? 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'"
-              class="w-10 h-10 flex items-center justify-center rounded-xl transition-all shadow-sm border border-transparent"
-              [title]="service.isActive !== false ? 'Deactivate' : 'Activate'">
-              <i [class]="service.isActive !== false ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
-            <button (click)="deleteService(service.id)"
-              class="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
-              <i class="fas fa-trash-alt text-sm"></i>
-            </button>
+          <div *ngIf="isAdmin()" class="flex flex-col gap-2">
+            <div class="flex gap-2">
+              <button [routerLink]="['/admin/services/edit', service.id]"
+                class="flex-1 bg-forest hover:bg-black text-cream py-2.5 rounded-xl font-bold text-xs transition-all uppercase shadow-sm">
+                <i class="fas fa-edit mr-1"></i> Modify
+              </button>
+              <button (click)="generateReputation(service.id)"
+                class="flex-1 bg-olive hover:bg-forest text-cream py-2.5 rounded-xl font-bold text-xs transition-all uppercase shadow-sm flex items-center justify-center gap-2">
+                <i *ngIf="!reputationLoading[service.id]" class="fas fa-sparkles"></i>
+                <i *ngIf="reputationLoading[service.id]" class="fas fa-circle-notch animate-spin"></i>
+                AI Reputation
+              </button>
+              <button (click)="toggleServiceAvailability(service)"
+                [ngClass]="service.isActive !== false ? 'bg-red-50 text-red-500 hover:bg-red-500 hover:text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'"
+                class="w-10 h-10 flex items-center justify-center rounded-xl transition-all shadow-sm border border-transparent"
+                [title]="service.isActive !== false ? 'Deactivate' : 'Activate'">
+                <i class="fas" [ngClass]="service.isActive !== false ? 'fa-eye-slash' : 'fa-eye'"></i>
+              </button>
+              <button (click)="deleteService(service.id)"
+                class="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                <i class="fas fa-trash-alt text-sm"></i>
+              </button>
+            </div>
+
+            <!-- AI Reputation Result Display -->
+            <div *ngIf="reputationResults[service.id]" 
+                 class="mt-2 p-4 rounded-xl bg-sage/10 border border-sage/30 text-[10px] text-forest relative animate-in fade-in slide-in-from-top-2">
+              <button (click)="closeReputation(service.id)" class="absolute top-2 right-2 text-forest/40 hover:text-forest">
+                <i class="fas fa-times"></i>
+              </button>
+              <div class="flex items-center gap-2 mb-2 font-black uppercase tracking-widest text-olive">
+                <i class="fas fa-robot"></i>
+                AI Sentiment Insight
+              </div>
+              <div class="prose prose-sm prose-invert whitespace-pre-line leading-relaxed italic">
+                {{ reputationResults[service.id] }}
+              </div>
+            </div>
           </div>
 
           <!-- Participant/User Action: Link to Reservation Total -->
@@ -262,6 +285,38 @@
             class="w-full bg-olive hover:bg-forest text-white py-3 rounded-xl font-black text-xs transition-all uppercase shadow-sm flex items-center justify-center gap-2">
             <i class="fas fa-calculator"></i> {{ isCamper() ? 'Add to Stay (Auto-Calc)' : 'Link to Reservation' }}
           </button>
+
+          <!-- ML Prediction — camper only -->
+          <div *ngIf="isCamper()" class="mt-1">
+            <button (click)="runMLPredict(service)" [disabled]="service.mlLoading"
+              class="w-full py-2.5 bg-purple-50 hover:bg-purple-100 disabled:opacity-50 text-purple-700 border border-purple-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+              <i class="fas" [ngClass]="service.mlLoading ? 'fa-spinner fa-spin' : 'fa-brain'"></i>
+              {{ service.mlLoading ? 'Analyzing...' : 'ML Predict' }}
+            </button>
+
+            <div *ngIf="service.mlResult && !service.mlResult.error" class="mt-2 space-y-1.5">
+              <div *ngIf="service.mlResult.predictedRating" class="flex justify-between items-center px-3 py-2 bg-amber-50 rounded-xl border border-amber-100">
+                <span class="text-[10px] font-black text-gray-400 uppercase">Predicted Rating</span>
+                <div class="text-right">
+                  <span class="text-xs font-black text-amber-500">★ {{ service.mlResult.predictedRating | number:'1.1-1' }}</span>
+                  <span *ngIf="service.mlResult.ratingLabel" class="block text-[9px] text-gray-400">{{ service.mlResult.ratingLabel }}</span>
+                </div>
+              </div>
+              <div *ngIf="service.mlResult.predictedDemand" class="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-xl">
+                <span class="text-[10px] font-black text-gray-400 uppercase">Demand</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black border" [ngClass]="demandBadge(service.mlResult.predictedDemand)">
+                  {{ service.mlResult.predictedDemand }}
+                </span>
+              </div>
+              <div *ngIf="service.mlResult.advice" class="px-3 py-2 bg-purple-50 rounded-xl border border-purple-100">
+                <p class="text-[9px] font-medium text-purple-600 italic">💡 {{ service.mlResult.advice }}</p>
+              </div>
+            </div>
+
+            <div *ngIf="service.mlResult?.error" class="mt-2 px-3 py-2 bg-red-50 rounded-xl border border-red-100">
+              <p class="text-[9px] font-bold text-red-500">⚠ {{ service.mlResult?.errorMessage }}</p>
+            </div>
+          </div>
 
           <!-- Organizer Action -->
           <button *ngIf="isOrganizer()" (click)="onSelectForEvent(service)"
@@ -274,6 +329,53 @@
             class="w-full bg-forest hover:bg-black text-white py-3 rounded-xl font-black text-xs transition-all uppercase shadow-md flex items-center justify-center gap-2">
             <i class="fas fa-shopping-cart"></i> Add to Cart
           </button>
+
+          <!-- AI Sentiment Review — Participant/Camper only -->
+          <div *ngIf="isParticipant()" class="mt-2">
+            <button (click)="toggleReviewForm(service.id)"
+              class="w-full py-3 bg-white border-2 border-[#1a2e1a] text-[#1a2e1a] hover:bg-[#1a2e1a] hover:text-white rounded-xl font-black text-xs transition-all uppercase flex items-center justify-center gap-2">
+              <i class="fas fa-star"></i>
+              {{ showReviewFormId === service.id ? 'Cancel Review' : 'Add Review & Sentiment' }}
+            </button>
+
+            <!-- Inline Review Form -->
+            <div *ngIf="showReviewFormId === service.id" class="mt-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 animate-fade-in space-y-4">
+              <div class="grid grid-cols-3 gap-2">
+                <div class="text-center">
+                  <label class="text-[9px] font-black uppercase text-gray-400 block mb-1">Global</label>
+                  <input type="number" [(ngModel)]="reviewData.rating" min="1" max="5" class="w-full p-2 rounded-lg text-center border">
+                </div>
+                <div class="text-center">
+                  <label class="text-[9px] font-black uppercase text-gray-400 block mb-1">Quality</label>
+                  <input type="number" [(ngModel)]="reviewData.qualityRating" min="1" max="5" class="w-full p-2 rounded-lg text-center border">
+                </div>
+                <div class="text-center">
+                  <label class="text-[9px] font-black uppercase text-gray-400 block mb-1">Value</label>
+                  <input type="number" [(ngModel)]="reviewData.valueRating" min="1" max="5" class="w-full p-2 rounded-lg text-center border">
+                </div>
+              </div>
+
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 block mb-1">PROS (comma separated)</label>
+                <input type="text" [(ngModel)]="reviewData.pros" placeholder="Punctual, Professional, High Quality" class="w-full p-2 rounded-lg border text-sm">
+              </div>
+
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 block mb-1">CONS (comma separated)</label>
+                <input type="text" [(ngModel)]="reviewData.cons" placeholder="A bit expensive, Small truck" class="w-full p-2 rounded-lg border text-sm">
+              </div>
+
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 block mb-1">Your Comment</label>
+                <textarea [(ngModel)]="reviewData.comment" rows="2" class="w-full p-2 rounded-lg border text-sm" placeholder="Tell us more..."></textarea>
+              </div>
+
+              <button (click)="submitReview(service.id)" [disabled]="reviewLoading"
+                class="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg hover:bg-emerald-700 transition-all">
+                {{ reviewLoading ? 'Submitting...' : '✨ Submit to AI Advisor' }}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

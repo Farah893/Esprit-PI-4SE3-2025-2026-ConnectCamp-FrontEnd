@@ -6,6 +6,7 @@ import { ServiceService } from '../../services/service.service';
 import { Service } from '../../models/service.model';
 import { forkJoin } from 'rxjs';
 import { UserService } from '../../../../services/user.service';
+import { AiService } from '../../../../services/ai.service';
 
 @Component({
     selector: 'app-candidature-manage',
@@ -19,11 +20,13 @@ export class CandidatureManageComponent implements OnInit {
     candidatures: Candidature[] = [];
     services: Service[] = [];
     loading = false;
+    fraudStatuses: Record<number, 'checking' | 'fraud' | 'safe'> = {};
 
     constructor(
         private candidatureService: CandidatureService,
         private serviceService: ServiceService,
-        private userService: UserService
+        private userService: UserService,
+        private aiService: AiService
     ) { }
 
     ngOnInit(): void {
@@ -88,6 +91,17 @@ export class CandidatureManageComponent implements OnInit {
 
         this.candidatureService.updateStatus(id, Number(user.id), 'EN_ATTENTE').subscribe({
             next: () => this.loadData()
+        });
+    }
+
+    checkFraud(cand: any): void {
+        if (!cand.id) return;
+        this.fraudStatuses[cand.id] = 'checking';
+        this.aiService.detectFraud(cand.candidatName || 'Unknown', cand.lettreMotivation || '').subscribe({
+            next: (isFraud) => {
+                this.fraudStatuses[cand.id!] = isFraud ? 'fraud' : 'safe';
+            },
+            error: () => delete this.fraudStatuses[cand.id!]
         });
     }
 }

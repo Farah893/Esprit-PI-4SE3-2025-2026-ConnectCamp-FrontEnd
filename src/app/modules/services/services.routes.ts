@@ -11,6 +11,8 @@ import { PromotionCreateComponent } from './components/promotion-create/promotio
 import { PromotionEditComponent } from './components/promotion-edit/promotion-edit.component';
 import { CandidatureListComponent } from './components/candidature-list/candidature-list.component';
 import { CandidatureManageComponent } from './components/candidature-manage/candidature-manage.component';
+import { PackStatsComponent } from './components/pack-stats/pack-stats.component';
+import { PackAdvancedComponent } from './components/pack-advanced/pack-advanced.component';
 
 import { ServiceHomeComponent } from './components/service-home/service-home.component';
 
@@ -21,6 +23,7 @@ export const SERVICES_ROUTES: Routes = [
     { path: 'create', component: ServiceCreateComponent },
     { path: 'edit/:id', component: ServiceEditComponent },
     { path: 'packs', component: PackListComponent },
+    { path: 'packs/advanced', component: PackAdvancedComponent },
     { path: 'packs/create', component: PackCreateComponent },
     { path: 'packs/edit/:id', component: PackEditComponent },
     { path: 'promotions', component: PromotionListComponent },

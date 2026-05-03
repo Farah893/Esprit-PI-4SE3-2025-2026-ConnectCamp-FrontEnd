@@ -11,6 +11,7 @@ import { EventServiceEntity, EventServiceEntityRequest } from '../models/event-s
 export class EventServiceEntityService {
     private http = inject(HttpClient);
     private apiUrl = `${environment.apiUrl}/event-services`;
+    private assignmentUrl = `${environment.apiUrl}/api/event-service-assignments`;
 
     addServiceToEvent(request: EventServiceEntityRequest): Observable<ApiResponse<EventServiceEntity>> {
         return this.http.post<ApiResponse<EventServiceEntity>>(this.apiUrl, request);
@@ -22,5 +23,15 @@ export class EventServiceEntityService {
 
     removeServiceFromEvent(id: number): Observable<ApiResponse<void>> {
         return this.http.delete<ApiResponse<void>>(`${this.apiUrl}/${id}`);
+    }
+
+    /** GET /api/event-service-assignments/recommendations/{eventId} */
+    getRecommendedServices(eventId: number): Observable<ApiResponse<any[]>> {
+        return this.http.get<ApiResponse<any[]>>(`${this.assignmentUrl}/recommendations/${eventId}`);
+    }
+
+    /** GET /api/event-service-assignments/recommended-packs/{eventId} */
+    getRecommendedPacks(eventId: number): Observable<ApiResponse<any[]>> {
+        return this.http.get<ApiResponse<any[]>>(`${this.assignmentUrl}/recommended-packs/${eventId}`);
     }
 }

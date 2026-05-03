@@ -10,6 +10,14 @@ import { CartItem } from '../../../../models/api.models';
 import { environment } from '../../../../../environments/environment';
 import { EventService } from '../../../../services/event.service';
 import { Event } from '../../../../models/event.model';
+import { ServiceMLResponse } from '../../../../models/camping-service.model';
+import { ReviewService } from '../../../../services/review.service';
+import { AiService } from '../../../../services/ai.service';
+
+interface ServiceWithML extends Service {
+    mlResult?: ServiceMLResponse;
+    mlLoading?: boolean;
+}
 
 @Component({
     selector: 'app-service-list',
@@ -19,12 +27,29 @@ import { Event } from '../../../../models/event.model';
     styleUrls: ['./service-list.component.css']
 })
 export class ServiceListComponent implements OnInit {
-    services: Service[] = [];
+    services: ServiceWithML[] = [];
     loading = false;
     error: string | null = null;
     searchTerm = '';
     userEvents: Event[] = [];
     selectedEventId: number | null = null;
+    
+    // AI Reputation State
+    reputationResults: Record<number, string> = {};
+    reputationLoading: Record<number, boolean> = {};
+
+    // Review Form State
+    showReviewFormId: number | null = null;
+    reviewData = {
+        rating: 5,
+        qualityRating: 5,
+        valueRating: 5,
+        pros: '',
+        cons: '',
+        comment: 'This service was great and very helpful for my stay.',
+        title: 'Great service'
+    };
+    reviewLoading = false;
 
     @Input() adminViewMode: 'ALL' | 'USER' | 'ORGANIZER' = 'ALL';
 
@@ -33,7 +58,9 @@ export class ServiceListComponent implements OnInit {
         private userService: UserService,
         private router: Router,
         private cartService: CartService,
-        private eventService: EventService
+        private eventService: EventService,
+        private reviewService: ReviewService,
+        private aiService: AiService
     ) { }
 
     ngOnInit(): void {
@@ -93,12 +120,35 @@ export class ServiceListComponent implements OnInit {
         return role === 'CAMPER';
     }
 
+    // ── ML Prediction (camper only) ───────────────────────────────────────
+    runMLPredict(service: ServiceWithML): void {
+        if (!service.id) return;
+        service.mlLoading = true;
+        service.mlResult = undefined;
+        this.serviceService.predictForService(service.id).subscribe({
+            next: (result) => { service.mlResult = result; service.mlLoading = false; },
+            error: () => {
+                service.mlResult = { error: true, errorMessage: 'ML server unavailable' };
+                service.mlLoading = false;
+            }
+        });
+    }
+
+    demandBadge(demand: string): string {
+        const map: Record<string, string> = {
+            HIGH:   'bg-emerald-100 text-emerald-700 border-emerald-200',
+            MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
+            LOW:    'bg-red-100 text-red-600 border-red-200'
+        };
+        return map[demand] ?? 'bg-gray-100 text-gray-500 border-gray-200';
+    }
+
     loadServices(): void {
         this.loading = true;
         this.error = null;
         this.serviceService.getAll().subscribe({
             next: (data) => {
-                this.services = data;
+                this.services = data.map(s => ({ ...s, mlResult: undefined, mlLoading: false }));
                 this.loading = false;
             },
             error: (err) => {
@@ -204,7 +254,7 @@ export class ServiceListComponent implements OnInit {
         }
     }
 
-    get filteredServices(): Service[] {
+    get filteredServices(): ServiceWithML[] {
         const userRole = this.userService.getLoggedInUser()?.role;
 
         let roleFiltered: Service[];
@@ -240,5 +290,75 @@ export class ServiceListComponent implements OnInit {
 
     getImageUrl(imagePath: string | undefined): string {
         return this.cartService.getImageUrl(imagePath);
+    }
+
+    // ── Service Review Logic ──────────────────────────────────────────
+    toggleReviewForm(serviceId: number): void {
+        if (this.showReviewFormId === serviceId) {
+            this.showReviewFormId = null;
+        } else {
+            this.showReviewFormId = serviceId;
+            // Reset data
+            this.reviewData = {
+                rating: 5,
+                qualityRating: 5,
+                valueRating: 5,
+                pros: '',
+                cons: '',
+                comment: 'This service was great and very helpful for my stay.',
+                title: 'Excellent service'
+            };
+        }
+    }
+
+    submitReview(serviceId: number): void {
+        const user = this.userService.getLoggedInUser();
+        if (!user) {
+            alert('Please login to leave a review.');
+            return;
+        }
+
+        this.reviewLoading = true;
+        const payload = {
+            rating: this.reviewData.rating,
+            qualityRating: this.reviewData.qualityRating,
+            valueRating: this.reviewData.valueRating,
+            title: this.reviewData.title,
+            comment: this.reviewData.comment,
+            pros: this.reviewData.pros.split(',').map(s => s.trim()).filter(s => s),
+            cons: this.reviewData.cons.split(',').map(s => s.trim()).filter(s => s)
+        };
+
+        this.reviewService.createServiceReview(serviceId, user.id, payload).subscribe({
+            next: () => {
+                alert('✨ Review submitted! Your feedback helps our AI learn.');
+                this.showReviewFormId = null;
+                this.reviewLoading = false;
+            },
+            error: (err) => {
+                console.error('Error submitting review', err);
+                alert(err.error?.message || 'Failed to submit review.');
+                this.reviewLoading = false;
+            }
+        });
+    }
+
+    generateReputation(serviceId: number): void {
+        this.reputationLoading[serviceId] = true;
+        this.reputationResults[serviceId] = '';
+        this.aiService.analyzeReputation(serviceId).subscribe({
+            next: (result) => {
+                this.reputationResults[serviceId] = result;
+                this.reputationLoading[serviceId] = false;
+            },
+            error: () => {
+                this.reputationResults[serviceId] = 'AI analysis unavailable for this service.';
+                this.reputationLoading[serviceId] = false;
+            }
+        });
+    }
+
+    closeReputation(serviceId: number): void {
+        delete this.reputationResults[serviceId];
     }
 }

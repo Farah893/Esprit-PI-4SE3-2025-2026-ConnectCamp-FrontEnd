@@ -202,7 +202,7 @@
               <label for="signup-password" class="auth-label">Password *</label>
               <div class="password-wrapper">
                 <input id="signup-password" [type]="showSignupPassword ? 'text' : 'password'"
-                  [(ngModel)]="registerForm.password" name="password" placeholder="••••••••" minlength="6"
+                  [(ngModel)]="registerForm.password" name="password" placeholder="••••••••"
                   class="auth-input" required />
                 <button type="button" (click)="showSignupPassword = !showSignupPassword" class="password-toggle"
                   aria-label="Toggle password">
@@ -219,6 +219,26 @@
                     </ng-container>
                   </svg>
                 </button>
+              </div>
+
+              <!-- Critères mot de passe — s'affichent dès que l'utilisateur tape -->
+              <div *ngIf="registerForm.password.length > 0" class="mt-2 space-y-1">
+                <div class="flex items-center gap-2 text-xs" [class.text-green-600]="passwordCriteria.minLength" [class.text-red-500]="!passwordCriteria.minLength">
+                  <span>{{ passwordCriteria.minLength ? '✓' : '✗' }}</span>
+                  <span>Au moins 8 caractères</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" [class.text-green-600]="passwordCriteria.hasUpper" [class.text-red-500]="!passwordCriteria.hasUpper">
+                  <span>{{ passwordCriteria.hasUpper ? '✓' : '✗' }}</span>
+                  <span>Au moins une majuscule (A-Z)</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" [class.text-green-600]="passwordCriteria.hasNumber" [class.text-red-500]="!passwordCriteria.hasNumber">
+                  <span>{{ passwordCriteria.hasNumber ? '✓' : '✗' }}</span>
+                  <span>Au moins un chiffre (0-9)</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs" [class.text-green-600]="passwordCriteria.hasSpecial" [class.text-red-500]="!passwordCriteria.hasSpecial">
+                  <span>{{ passwordCriteria.hasSpecial ? '✓' : '✗' }}</span>
+                  <span>Au moins un caractère spécial (ex&nbsp;: ! &#64; # $ % *)</span>
+                </div>
               </div>
             </div>
 
@@ -322,7 +342,8 @@
               </label>
             </div>
 
-            <button type="submit" [disabled]="isLoading" class="auth-btn">
+            <button type="submit" [disabled]="isLoading || !isPasswordValid" class="auth-btn"
+              [class.opacity-50]="!isPasswordValid" [class.cursor-not-allowed]="!isPasswordValid">
               {{ isLoading ? 'Creating account…' : 'Create account' }}
             </button>
 

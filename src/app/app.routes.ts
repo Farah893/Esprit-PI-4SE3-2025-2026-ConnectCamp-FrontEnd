@@ -3,11 +3,9 @@ import { AuthGuard, SellerGuard, ClientGuard, AdminGuard, OrganizerOnlyGuard, Or
 import { ParticipantGuard } from './guards/participant.guard';
 
 export const routes: Routes = [
-  // Redirect root to the auth login page
-  { path: '', redirectTo: '/auth/login', pathMatch: 'full' },
-
-  // Home page – only accessible after login
-  { path: 'home', loadComponent: () => import('./components/home-hub/home-hub.component').then(m => m.HomeHubComponent), canActivate: [AuthGuard] },
+  // Landing Page (Home Hub) - Publicly accessible
+  { path: '', loadComponent: () => import('./components/home-hub/home-hub.component').then(m => m.HomeHubComponent) },
+  { path: 'home', loadComponent: () => import('./components/home-hub/home-hub.component').then(m => m.HomeHubComponent) },
 
   // --- Campsites (public) ---
   {
@@ -102,6 +100,8 @@ export const routes: Routes = [
       { path: 'services/packs/edit/:id', loadComponent: () => import('./modules/services/components/pack-edit/pack-edit.component').then(m => m.PackEditComponent) },
       { path: 'services/promotions/create', loadComponent: () => import('./modules/services/components/promotion-create/promotion-create.component').then(m => m.PromotionCreateComponent) },
       { path: 'services/promotions/edit/:id', loadComponent: () => import('./modules/services/components/promotion-edit/promotion-edit.component').then(m => m.PromotionEditComponent) },
+      { path: 'services/packs', loadComponent: () => import('./modules/services/components/pack-list/pack-list.component').then(m => m.PackListComponent) },
+      { path: 'services/packs/stats', loadComponent: () => import('./modules/services/components/pack-stats/pack-stats.component').then(m => m.PackStatsComponent) },
     ]
   },
   { path: 'admin/gamification', loadComponent: () => import('./admin/gamification-management/gamification-management.component').then(m => m.GamificationManagementComponent), canActivate: [AdminGuard] },

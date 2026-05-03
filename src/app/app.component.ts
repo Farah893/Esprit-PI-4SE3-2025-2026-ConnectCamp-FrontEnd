@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { Router, NavigationEnd, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { MainLayoutComponent } from './components/main-layout/main-layout.component';
+import { AuthService } from './services/auth.service';
+import { AlertNotificationPollingService } from './services/alert-notification-polling.service';
 
 @Component({
   selector: 'app-root',
@@ -22,10 +24,28 @@ import { MainLayoutComponent } from './components/main-layout/main-layout.compon
 export class AppComponent implements OnInit {
   showLayout = true;
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private auth: AuthService,
+    private alertPolling: AlertNotificationPollingService
+  ) {}
 
   ngOnInit() {
     this.updateLayoutVisibility(this.router.url);
+
+    // Start polling when a user is already logged in (page refresh)
+    if (this.auth.getCurrentUser()?.role === 'CAMPER') {
+      this.alertPolling.start();
+    }
+
+    // React to login / logout during the session
+    this.auth.currentUser$.subscribe(user => {
+      if (user?.role === 'CAMPER') {
+        this.alertPolling.start();
+      } else {
+        this.alertPolling.stop();
+      }
+    });
 
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))

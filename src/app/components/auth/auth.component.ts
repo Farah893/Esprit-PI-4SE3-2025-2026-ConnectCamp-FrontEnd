@@ -152,13 +152,28 @@ export class AuthComponent implements OnInit, OnDestroy {
     });
   }
 
+  get passwordCriteria() {
+    const p = this.registerForm.password;
+    return {
+      minLength:   p.length >= 8,
+      hasUpper:    /[A-Z]/.test(p),
+      hasNumber:   /[0-9]/.test(p),
+      hasSpecial:  /[@$!%*?&#+\-_=]/.test(p),
+    };
+  }
+
+  get isPasswordValid(): boolean {
+    const c = this.passwordCriteria;
+    return c.minLength && c.hasUpper && c.hasNumber && c.hasSpecial;
+  }
+
   register(): void {
     if (!this.registerForm.name || !this.registerForm.username ||
       !this.registerForm.email || !this.registerForm.password) {
       this.errorMessage = 'Please fill in all required fields'; return;
     }
     if (this.registerForm.username.length < 3) { this.errorMessage = 'Username must be at least 3 characters'; return; }
-    if (this.registerForm.password.length < 6) { this.errorMessage = 'Password must be at least 6 characters'; return; }
+    if (!this.isPasswordValid) { this.errorMessage = 'Password does not meet all requirements.'; return; }
 
     this.isLoading = true;
     this.clearMessages();

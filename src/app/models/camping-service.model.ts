@@ -29,6 +29,18 @@ export interface CampingService {
     createdAt?: string;
 }
 
+/** ML response from GET /api/camping-services/{id}/ml/predict */
+export interface ServiceMLResponse {
+    predictedRating?: number;
+    ratingLabel?: string;
+    predictedDemand?: string;
+    demandProbabilities?: { [key: string]: number };
+    confidence?: number;
+    advice?: string;
+    error: boolean;
+    errorMessage?: string;
+}
+
 export interface CampingServiceRequest {
     name: string;
     description: string;

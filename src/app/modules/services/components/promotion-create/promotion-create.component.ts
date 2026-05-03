@@ -47,6 +47,7 @@ export class PromotionCreateComponent implements OnInit {
         // Map frontend form properties to Backend expected PromotionRequest properties
         const payload: Promotion = {
             name: formValues.code, // The backend uses 'name' which we treat as the code
+            code: formValues.code.toUpperCase(), // The promo code used for validation (findByCodeIgnoreCase)
             description: formValues.description,
             type: 'PERCENTAGE', // We are creating percentage discounts
             discountValue: formValues.percentage, // Map percentage to discountValue

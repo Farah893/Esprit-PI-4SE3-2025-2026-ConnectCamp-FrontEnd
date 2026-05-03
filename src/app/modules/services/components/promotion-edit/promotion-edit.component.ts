@@ -88,6 +88,7 @@ export class PromotionEditComponent implements OnInit {
         const payload: Promotion = {
             id: this.promoId,
             name: formValues.code,
+            code: formValues.code.toUpperCase(), // The promo code used for validation (findByCodeIgnoreCase)
             description: formValues.description,
             type: 'PERCENTAGE',
             discountValue: formValues.percentage,

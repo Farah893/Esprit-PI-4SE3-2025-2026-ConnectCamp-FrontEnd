@@ -8,6 +8,8 @@ import { ServiceService } from '../../services/service.service';
 import { Service } from '../../models/service.model';
 import { environment } from '../../../../../environments/environment';
 import { CartService } from '../../../../services/cart.service';
+import { SiteService } from '../../../../services/site.service';
+import { AiService } from '../../../../services/ai.service';
 
 @Component({
     selector: 'app-pack-create',
@@ -19,7 +21,9 @@ import { CartService } from '../../../../services/cart.service';
 export class PackCreateComponent implements OnInit {
     packForm: FormGroup;
     services: Service[] = [];
+    sites: any[] = [];
     loading = false;
+    isGeneratingAI = false;
     submitted = false;
     errorMessage = '';
     imagePreviews: string[] = [];
@@ -32,7 +36,9 @@ export class PackCreateComponent implements OnInit {
         private serviceService: ServiceService,
         private router: Router,
         private http: HttpClient,
-        public cartService: CartService
+        public cartService: CartService,
+        private siteService: SiteService,
+        private aiService: AiService
     ) {
         this.packForm = this.fb.group({
             name: ['', [Validators.required, Validators.minLength(3)]],
@@ -43,12 +49,21 @@ export class PackCreateComponent implements OnInit {
             serviceIds: [[], [Validators.required, Validators.minLength(1)]],
             durationDays: [1, [Validators.required, Validators.min(1)]],
             maxPersons: [1, [Validators.required, Validators.min(1)]],
+            siteId: [null, Validators.required],
             available: [true]
         });
     }
 
     ngOnInit(): void {
         this.loadServices();
+        this.loadSites();
+    }
+
+    loadSites(): void {
+        this.siteService.getAllSites().subscribe({
+            next: (data) => this.sites = data,
+            error: (err) => console.error('Error loading sites', err)
+        });
     }
 
     loadServices(): void {
@@ -140,6 +155,7 @@ export class PackCreateComponent implements OnInit {
             serviceIds: f.serviceIds,
             durationDays: Number(f.durationDays || 1),
             maxPersons: Number(f.maxPersons || 1),
+            siteId: f.siteId,
             available: f.available,
             isActive: f.available,
             images: imageFileNames,
@@ -188,5 +204,38 @@ export class PackCreateComponent implements OnInit {
 
     getImageUrl(imagePath: string | undefined): string {
         return this.cartService.getImageUrl(imagePath);
+    }
+
+    generateAIDescription(): void {
+        const name = this.packForm.get('name')?.value;
+        const siteId = this.packForm.get('siteId')?.value;
+        const serviceIds = this.packForm.get('serviceIds')?.value;
+
+        if (!name || !siteId) {
+            this.errorMessage = 'Please enter a name and select a site first to use AI generation.';
+            return;
+        }
+
+        const site = this.sites.find(s => s.id === Number(siteId))?.name || 'Unknown Location';
+        const selectedServices = this.services
+            .filter(s => serviceIds.includes(s.id))
+            .map(s => s.name)
+            .join(', ');
+
+        this.isGeneratingAI = true;
+        this.errorMessage = '';
+
+        this.aiService.generatePackDescription(name, selectedServices || 'Various camping services', site)
+            .subscribe({
+                next: (desc) => {
+                    this.packForm.patchValue({ description: desc });
+                    this.isGeneratingAI = false;
+                },
+                error: (err) => {
+                    console.error('AI generation failed', err);
+                    this.errorMessage = 'Failed to generate AI description.';
+                    this.isGeneratingAI = false;
+                }
+            });
     }
 }
