@@ -71,6 +71,7 @@ export class CartService {
 
   getImageUrl(imagePath: string | undefined): string {
     if (!imagePath) return 'assets/images/default.png';
+    if (imagePath.startsWith('http') || imagePath.startsWith('assets/')) return imagePath;
     return `${environment.apiUrl}/uploads/${imagePath}`;
   }
   addItem(item: CartItem): Observable<void> {

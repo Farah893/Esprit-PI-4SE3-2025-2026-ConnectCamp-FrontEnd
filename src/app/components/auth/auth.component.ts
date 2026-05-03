@@ -51,7 +51,7 @@ export class AuthComponent implements OnInit, OnDestroy {
     address: '',
     country: '',
     age: null as number | null,
-    role: 'CAMPER' as string,              // default changed from CLIENT to CAMPER
+    role: 'CAMPER' as string,
     isSeller: false,
     isBuyer: true,
     storeName: '',
@@ -168,6 +168,8 @@ export class AuthComponent implements OnInit, OnDestroy {
   }
 
   register(): void {
+    console.log('[DEBUG] Tentative d\'inscription avec le payload:', this.registerForm);
+    
     if (!this.registerForm.name || !this.registerForm.username ||
       !this.registerForm.email || !this.registerForm.password) {
       this.errorMessage = 'Please fill in all required fields'; return;
@@ -183,7 +185,7 @@ export class AuthComponent implements OnInit, OnDestroy {
       'SELLER': 'SELLER',
       'ORGANIZER': 'ORGANIZER',
       'SPONSOR': 'SPONSOR',
-      'CAMPER': 'PARTICIPANT',
+      'CAMPER': 'CAMPER',
       'PARTICIPANT': 'PARTICIPANT'
     };
     const backendRole = roleMapping[this.registerForm.role] || 'USER';
@@ -195,8 +197,7 @@ export class AuthComponent implements OnInit, OnDestroy {
       password: this.registerForm.password,
       role: backendRole,
       isSeller: this.registerForm.role === 'SELLER',
-      isBuyer: this.registerForm.isBuyer,
-      avatar: 'avatar.png'
+      isBuyer: this.registerForm.isBuyer
     };
     if (this.registerForm.phone) payload.phone = this.registerForm.phone;
     if (this.registerForm.address) payload.address = this.registerForm.address;
@@ -205,8 +206,11 @@ export class AuthComponent implements OnInit, OnDestroy {
     if (this.registerForm.storeName) payload.storeName = this.registerForm.storeName;
     if (this.registerForm.bio) payload.bio = this.registerForm.bio;
 
+    console.log('[DEBUG] Payload envoyé au serveur:', payload);
+
     this.authService.register(payload).subscribe({
       next: (auth) => {
+        console.log('[DEBUG] Inscription réussie:', auth);
         this.isLoading = false;
         this.successMessage = 'Account created! Redirecting…';
         const role = auth.user.role;
@@ -221,7 +225,14 @@ export class AuthComponent implements OnInit, OnDestroy {
         }
         this.cartService.syncCartAfterLogin();
       },
-      error: (err) => { this.isLoading = false; this.errorMessage = err.message || 'Registration failed.'; }
+      error: (err) => { 
+        console.error('[DEBUG] Erreur d\'inscription:', err);
+        this.isLoading = false; 
+        // Try to get detail message from backend error response
+        const apiError = err.error?.data || err.error;
+        const detailMsg = typeof apiError === 'string' ? apiError : apiError?.message;
+        this.errorMessage = detailMsg || err.message || 'Registration failed.'; 
+      }
     });
   }
 

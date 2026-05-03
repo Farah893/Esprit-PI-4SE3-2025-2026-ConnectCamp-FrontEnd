@@ -17,7 +17,7 @@ export class AdminComponent implements OnInit {
   successMessage = '';
   errorMessage = '';
 
-  private apiUrl = 'http://localhost:8080/api/admin';
+  private apiUrl = 'http://localhost:8089/api/admin';
 
   menuItems = [
     { id: 'dashboard',  label: 'Dashboard',  icon: '📊' },

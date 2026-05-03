@@ -5,10 +5,10 @@
       <h1 class="text-3xl font-black text-[#1a2e1a]">Business Intelligence</h1>
       <p class="text-sm text-gray-500 font-medium">Advanced analytics and performance indicators</p>
     </div>
-    <button routerLink="/admin/services/packs" 
+    <button [routerLink]="['/admin/services/packs']" 
       class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-all shadow-sm">
       <i class="fas fa-arrow-left"></i>
-      Back to Dashboard
+      Back to Packs
     </button>
   </div>
   <!-- ========================================================
@@ -142,8 +142,10 @@
 
     <div *ngIf="!filterLoading && filteredPacks.length > 0" class="packs-grid">
       <div class="pack-card" *ngFor="let p of filteredPacks">
-        <div class="pack-card-img" *ngIf="p.imageUrl || p.image">
-          <img [src]="p.imageUrl || p.image" [alt]="p.name" />
+        <div class="pack-card-img">
+          <img [src]="getImageUrl(p.imageUrl || p.image)" 
+               [alt]="p.name"
+               onerror="this.src='assets/images/default.png'; this.onerror=null;" />
         </div>
         <div class="pack-card-body">
           <h3>{{ p.name }}</h3>
