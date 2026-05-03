@@ -177,6 +177,13 @@ export interface StockMovement {
   performedBy: string;
   createdAt: string;
 }
+// ========== ORDER STATISTICS ==========
+export interface OrderStatisticsResponse {
+  status: string;
+  orderCount: number;
+  totalItemsSold: number;
+  avgRevenuePerItemType: number;
+}
 
 export interface CreateStockMovementDto {
   productId: string;

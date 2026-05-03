@@ -15,6 +15,9 @@ export interface Product {
   isFeatured: boolean;
   seoTitle?: string;
   seoDescription?: string;
+  convertedPrice?: number;
+  originalPriceConverted?: number;
+  currency?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,27 +74,25 @@ export interface Subcategory {
 }
 
 // ========== ORDERS ==========
-// ========== ORDERS ==========
 export interface Order {
   id: number;
   customerName: string;
   orderDate: string;
-  createdAt: string;        // ✅ add — used by formatDate(order.createdAt)
+  createdAt: string;
   status: string;
   totalAmount: number;
-  trackingNumber?: string;  // ✅ add — used in template
+  trackingNumber?: string;
   items: OrderItem[];
 }
 
 export interface OrderItem {
   productName: string;
   quantity: number;
-  price: number;            // ✅ keep existing field
-  type?: string;            // ✅ add — used for RENTAL badge
-  rentalDays?: number;      // ✅ add — used for rental duration
+  price: number;
+  type?: string;
+  rentalDays?: number;
 }
 
-// ✅ Add this — used by checkout()
 export interface CreateOrderDto {
   items: {
     productId: string;
@@ -100,11 +101,11 @@ export interface CreateOrderDto {
     rentalDays?: number;
   }[];
   shippingAddress:    string;
-  shippingName:       string;    // ✅ add
-  shippingPhone:      string;    // ✅ add
-  shippingCity:       string;    // ✅ add
-  shippingPostalCode: string;    // ✅ add
-  shippingCountry:    string;    // ✅ add
+  shippingName:       string;
+  shippingPhone:      string;
+  shippingCity:       string;
+  shippingPostalCode: string;
+  shippingCountry:    string;
   paymentMethod:      string;
   notes?:             string;
   couponCode?:        string;
@@ -119,4 +120,30 @@ export interface DashboardStats {
   lowStockItems: number;
   totalStock: number;
   stockValue: number;
+}
+
+// ========== QUALITY SCORE ==========
+
+export type QualityBadge =
+  | 'EXCELLENT'
+  | 'GOOD'
+  | 'AVERAGE'
+  | 'NEEDS_IMPROVEMENT';
+
+export interface QualityScoreBreakdown {
+  completenessScore: number;   // 0–25
+  mediaScore: number;          // 0–15
+  reviewScore: number;         // 0–25
+  performanceScore: number;    // 0–20
+  sellerScore: number;         // 0–15
+}
+
+export interface ProductQualityScoreResponse {
+  productId: number;
+  productName: string;
+  overallScore: number;        // 0–100
+  badge: QualityBadge;
+  badgeColor: string;          // 'gold' | 'silver' | 'bronze' | 'gray'
+  breakdown: QualityScoreBreakdown;
+  isActive: boolean;
 }

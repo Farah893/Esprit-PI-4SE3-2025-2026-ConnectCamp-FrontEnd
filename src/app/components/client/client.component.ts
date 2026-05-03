@@ -9,13 +9,24 @@ import { AuthService } from '../../services/auth.service';
 import { AccountProfileService } from '../../services/account-profile.service';
 import { NotificationService } from '../../services/notification.service';
 import { ApiService } from '../../services/api.service';
-// ✅ CreateOrderDto removed — no longer used as a type annotation
+import { GeolocationService } from '../../services/geolocation.service';
+import { PriceCalculationService, CartTotals } from '../../services/price-calculation.service';
+import { InvoiceService } from '../../services/invoice.service';           // ← NEW
+import { TrackingService } from '../../services/tracking.service';         // ← NEW
+import { CountrySelectorComponent } from '../country-selector/country-selector.component';
+import { OrderTrackingComponent } from '../order-tracking/order-tracking.component'; // ← NEW
 import { CartItem, Wallet, WalletTransaction, Order } from '../../models/api.models';
 
 @Component({
   selector: 'app-client',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    CountrySelectorComponent,
+    OrderTrackingComponent,   // ← NEW
+  ],
   templateUrl: './client.component.html',
   styleUrls: ['./client.component.css']
 })
@@ -40,7 +51,7 @@ export class ClientComponent implements OnInit {
   customerCountry = '';
   customerAddress = '';
 
-  // Wallet — initialized to 0 so .toFixed(2) never crashes before HTTP load
+  // Wallet
   walletBalance = 0;
   loyaltyPoints = 0;
   walletTransactions: WalletTransaction[] = [];
@@ -53,18 +64,30 @@ export class ClientComponent implements OnInit {
   // Cart
   cartItems: CartItem[] = [];
   selectedPaymentMethod: 'wallet' | 'card' = 'wallet';
-  shippingCost    = 15.00;
   shippingAddress = '';
 
   // Modals
-  showAddFundsModal   = false;
-  showWithdrawModal   = false;
-  showTransferModal   = false;
-  showCheckoutSuccess = false;
-  addFundsAmount      = 100;
+  showAddFundsModal    = false;
+  showWithdrawModal    = false;
+  showTransferModal    = false;
+  showCheckoutSuccess  = false;
+  addFundsAmount       = 100;
   fundingSource: 'CARD' | 'BANK_TRANSFER' = 'CARD';
-  latestOrderId    = '';
-  lastEarnedPoints = 0;
+  latestOrderId     = '';
+  lastEarnedPoints  = 0;
+
+  // ── Tracking modal (NEW) ───────────────────────────────
+  showTrackingModal = false;
+  trackingOrderId: number | string = '';
+
+  // ── Invoice download state (NEW) ──────────────────────
+  downloadingInvoiceId: number | string | null = null;
+
+  // Geo & pricing
+  currentCountryCode = 'FR';
+  currencySymbol = '€';
+  private cartTotals: CartTotals | null = null;
+  isCalculatingPrices = false;
 
   constructor(
     private route:               ActivatedRoute,
@@ -75,7 +98,11 @@ export class ClientComponent implements OnInit {
     private authService:         AuthService,
     private accountProfile:      AccountProfileService,
     private notificationService: NotificationService,
-    private apiService:          ApiService
+    private apiService:          ApiService,
+    private geoService:          GeolocationService,
+    private priceService:        PriceCalculationService,
+    private invoiceService:      InvoiceService,          // ← NEW
+    private trackingService:     TrackingService,         // ← NEW
   ) {}
 
   ngOnInit() {
@@ -86,14 +113,11 @@ export class ClientComponent implements OnInit {
       this.customerPhone   = user.phone   || '';
       this.customerCountry = user.country || '';
       this.customerAddress = user.address || '';
-      // Pre-fill shipping address from saved profile
       this.shippingAddress = user.address || '';
     }
 
     const routeData = this.route.snapshot.data;
-    if (routeData['defaultTab']) {
-      this.activeTab = routeData['defaultTab'];
-    }
+    if (routeData['defaultTab']) this.activeTab = routeData['defaultTab'];
 
     this.route.queryParams.subscribe(params => {
       if (params['tab']) this.activeTab = params['tab'];
@@ -102,10 +126,19 @@ export class ClientComponent implements OnInit {
     this.cartService.cart$.subscribe(items => {
       this.cartItems = items;
       this.updateCartBadge();
+      this.recalculateCartPrices();
     });
 
     this.loadWallet();
     this.loadOrders();
+
+    this.geoService.location$.subscribe(loc => {
+      this.currentCountryCode = loc.countryCode;
+      this.currencySymbol = this.geoService.getCurrencyForCountry(loc.countryCode).symbol;
+      this.recalculateCartPrices();
+    });
+
+    this.geoService.detectLocation().subscribe();
   }
 
   // ── Data loading ──────────────────────────────────────
@@ -122,10 +155,7 @@ export class ClientComponent implements OnInit {
             this.walletBalance = data?.balance       ?? 0;
             this.loyaltyPoints = data?.loyaltyPoints ?? 0;
           },
-          error: () => {
-            this.walletBalance = 0;
-            this.loyaltyPoints = 0;
-          }
+          error: () => { this.walletBalance = 0; this.loyaltyPoints = 0; }
         });
       }
     });
@@ -151,13 +181,29 @@ export class ClientComponent implements OnInit {
   // ── Cart computed ─────────────────────────────────────
 
   get cartSubtotal(): number {
-    return this.cartItems.reduce(
+    if (this.cartTotals) return this.cartTotals.subtotal;
+    return this.cartItems?.reduce(
       (sum, item) => sum + ((item.price ?? 0) * (item.quantity ?? 1)), 0
-    );
+    ) ?? 0;
   }
 
-  get cartTax(): number   { return this.cartSubtotal * 0.1; }
-  get cartTotal(): number { return this.cartSubtotal + this.shippingCost + this.cartTax; }
+  get cartTax(): number {
+    if (this.cartTotals) return this.cartTotals.tax;
+    const rate = this.geoService.getVatRateForCountry(this.currentCountryCode);
+    return this.cartSubtotal * (rate / 100);
+  }
+
+  get cartShipping(): number  { return this.cartTotals?.shipping ?? 0; }
+  get cartCustoms(): number   { return this.cartTotals?.customs  ?? 0; }
+
+  get cartTotal(): number {
+    return this.cartTotals?.total
+      ?? (this.cartSubtotal + this.cartTax + this.cartShipping + this.cartCustoms);
+  }
+
+  get currentVatRate(): number {
+    return this.geoService.getVatRateForCountry(this.currentCountryCode);
+  }
 
   get filteredOrders(): Order[] {
     if (this.selectedOrderStatus === 'All') return this.customerOrders;
@@ -194,11 +240,8 @@ export class ClientComponent implements OnInit {
   updateQuantity(index: number, change: number) {
     const item = this.cartItems[index];
     const newQty = item.quantity + change;
-    if (newQty <= 0) {
-      this.removeFromCart(index);
-    } else {
-      this.cartService.updateQuantity(item.productId, newQty).subscribe();
-    }
+    if (newQty <= 0) this.removeFromCart(index);
+    else this.cartService.updateQuantity(item.productId, newQty).subscribe();
   }
 
   removeFromCart(index: number) {
@@ -221,15 +264,9 @@ export class ClientComponent implements OnInit {
   }
 
   confirmAddFunds() {
-    if (this.addFundsAmount <= 0) {
-      alert('⚠️ Please enter a valid amount');
-      return;
-    }
+    if (this.addFundsAmount <= 0) { alert('⚠️ Please enter a valid amount'); return; }
     this.isLoading = true;
-    this.walletService.addFunds({
-      amount: this.addFundsAmount,
-      source: this.fundingSource
-    }).subscribe({
+    this.walletService.addFunds({ amount: this.addFundsAmount, source: this.fundingSource }).subscribe({
       next: (wallet) => {
         this.walletBalance     = wallet?.balance       ?? 0;
         this.loyaltyPoints     = wallet?.loyaltyPoints ?? 0;
@@ -245,39 +282,53 @@ export class ClientComponent implements OnInit {
     });
   }
 
+  // ── Country change ────────────────────────────────────
+
+  onCountryChange(countryCode: string): void {
+    this.geoService.setCountry(countryCode);
+  }
+
+  // ── Price recalculation ───────────────────────────────
+
+  private recalculateCartPrices(): void {
+    if (!this.cartItems?.length) return;
+    this.isCalculatingPrices = true;
+    const items = this.cartItems.map(item => ({
+      productId: Number(item.productId),
+      quantity:  item.quantity ?? 1
+    }));
+    this.priceService.calculateCartTotals(items, this.currentCountryCode).subscribe({
+      next: totals => {
+        this.cartTotals      = totals;
+        this.currencySymbol  = totals.currencySymbol;
+        this.isCalculatingPrices = false;
+      },
+      error: () => { this.cartTotals = null; this.isCalculatingPrices = false; }
+    });
+  }
+
   // ── Checkout ──────────────────────────────────────────
 
   checkout() {
-    if (this.cartItems.length === 0) {
-      alert('⚠️ Your cart is empty');
-      return;
-    }
-
-    if (!this.shippingAddress?.trim()) {
-      alert('⚠️ Please enter a shipping address');
-      return;
-    }
-
+    if (this.cartItems.length === 0) { alert('⚠️ Your cart is empty'); return; }
+    if (!this.shippingAddress?.trim()) { alert('⚠️ Please enter a shipping address'); return; }
     if (this.selectedPaymentMethod === 'wallet' && this.walletBalance < this.cartTotal) {
       alert('⚠️ Insufficient wallet balance. Please add funds or choose card payment.');
       return;
     }
 
-    // ✅ No `: CreateOrderDto` annotation — TypeScript infers the type from
-    //    OrderService.create() parameter shape, which accepts all these fields.
     const orderData = {
       shippingAddress:    this.shippingAddress.trim(),
       shippingName:       this.customerName    || '',
       shippingPhone:      this.customerPhone   || '',
       shippingCity:       this.customerCountry || '',
       shippingPostalCode: '',
-      shippingCountry:    this.customerCountry || '',
+      shippingCountry:    this.currentCountryCode,
+      shippingCurrency:   this.currencySymbol,
       paymentMethod:      this.selectedPaymentMethod === 'wallet' ? 'WALLET' : 'CARD',
       items: this.cartItems.map(item => ({
-        productId:  item.productId,
-        quantity:   item.quantity,
-        type:       item.type,
-        rentalDays: item.rentalDays
+        productId: item.productId, quantity: item.quantity,
+        type: item.type, rentalDays: item.rentalDays
       }))
     };
 
@@ -312,17 +363,19 @@ export class ClientComponent implements OnInit {
     alert(`Order #${order.id}\nStatus: ${order.status}\nTotal: $${total}\nItems: ${count}`);
   }
 
+  /** Opens the new tracking modal instead of a plain alert */
   trackOrder(order: Order) {
-    if (order.trackingNumber) {
-      alert(`📍 Tracking Order #${order.id}\nTracking Number: ${order.trackingNumber}`);
-    } else {
-      alert('Tracking information not yet available.');
-    }
+    this.trackingOrderId  = order.id;
+    this.showTrackingModal = true;
+  }
+
+  closeTrackingModal() {
+    this.showTrackingModal = false;
+    this.trackingOrderId  = '';
   }
 
   cancelOrder(order: Order) {
     if (confirm(`Are you sure you want to cancel Order #${order.id}?`)) {
-      // ✅ order.id is number; cancel() expects string
       this.orderService.cancel(String(order.id)).subscribe({
         next: ()     => { alert(`✅ Order #${order.id} cancelled.`); this.loadOrders(); },
         error: (err) => alert('❌ Failed to cancel: ' + (err.message || 'Unknown error'))
@@ -330,8 +383,25 @@ export class ClientComponent implements OnInit {
     }
   }
 
+  /**
+   * Downloads the PDF invoice from the backend.
+   * Backend: GET /api/orders/{id}/invoice/pdf
+   */
   downloadInvoice(order: Order) {
-    alert(`📄 Invoice for Order #${order.id} — coming soon`);
+    this.downloadingInvoiceId = order.id;
+
+    this.invoiceService.downloadInvoicePdf(order.id).subscribe({
+      next: (blob: Blob) => {
+        this.invoiceService.triggerDownload(blob, `invoice-order-${order.id}.pdf`);
+        this.downloadingInvoiceId = null;
+      },
+      error: (err) => {
+        this.downloadingInvoiceId = null;
+        // Fallback: try to generate first then download
+        alert('❌ Invoice not available yet. The invoice is generated on first request — please try again in a moment.');
+        console.error('Invoice download error:', err);
+      }
+    });
   }
 
   // ── Badge / status helpers ────────────────────────────

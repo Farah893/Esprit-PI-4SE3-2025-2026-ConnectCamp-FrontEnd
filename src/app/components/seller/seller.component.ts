@@ -14,7 +14,8 @@ import { of } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
 import {
   Product, Category, Inventory, StockMovement, Warehouse, Order, Rental,
-  CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto
+  CreateCategoryDto, CreateStockMovementDto, CreateWarehouseDto,
+  OrderStatisticsResponse
 } from '../../models/api.models';
 import { HttpClient } from '@angular/common/http';
 import { PricePredictionService, PricePrediction } from '../../services/price-prediction.service';
@@ -32,11 +33,12 @@ export class SellerComponent implements OnInit {
   errorMessage = '';
 
   menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'products', label: 'Products & Categories', icon: '📦' },
-    { id: 'inventory', label: 'Inventory & Warehouses', icon: '📊' },
-    { id: 'orders', label: 'Orders', icon: '📋' },
-    { id: 'rentals', label: 'Rentals Management', icon: '📅' }
+    { id: 'dashboard',   label: 'Dashboard',             icon: '📊' },
+    { id: 'products',    label: 'Products & Categories',  icon: '📦' },
+    { id: 'inventory',   label: 'Inventory & Warehouses', icon: '🏭' },
+    { id: 'orders',      label: 'Orders',                 icon: '📋' },
+    { id: 'rentals',     label: 'Rentals Management',     icon: '📅' },
+    { id: 'statistics',  label: 'Order Statistics',       icon: '📈' }
   ];
 
   activeSubSection: 'categories' | 'products' = 'categories';
@@ -54,22 +56,20 @@ export class SellerComponent implements OnInit {
 
   globalStockAlertThreshold = 15;
 
-  // ✅ productForm avec tous les champs ML
   productForm: any = {
     name: '', description: '', shortDescription: '', price: 0, compareAtPrice: 0,
     sku: '', categoryId: '', tags: [], tagsInput: '', isActive: true, isFeatured: false,
     isOnSale: false, rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30,
-    // Champs ML
     brand: 'Unknown', supplierCost: 0, shippingCost: 0, weight: 0,
     stockQuantity: 0, minStockLevel: 0, rating: 3.0,
     reviewCount: 0, salesCount: 0, viewCount: 0, imagesCount: 1,
   };
 
-  restockForm: any = { productName: '', productId: '', warehouseId: '', quantity: 0, notes: '' };
+  restockForm: any       = { productName: '', productId: '', warehouseId: '', quantity: 0, notes: '' };
   stockMovementForm: any = { productId: '', type: 'IN', quantity: 0, reason: '', locationCode: '', warehouseId: '' };
-  warehouseForm: any = { name: '', code: '', address: '', city: '', country: '', phone: '', email: '', isActive: true };
-  categoryForm: any = { name: '', description: '', icon: '📦' };
-  stockAlertForm: any = { inventoryId: '', productName: '', currentThreshold: 0, newThreshold: 0 };
+  warehouseForm: any     = { name: '', code: '', address: '', city: '', country: '', phone: '', email: '', isActive: true };
+  categoryForm: any      = { name: '', description: '', icon: '📦' };
+  stockAlertForm: any    = { inventoryId: '', productName: '', currentThreshold: 0, newThreshold: 0 };
 
   searchTerm = '';
   filterCategory = '';
@@ -85,18 +85,30 @@ export class SellerComponent implements OnInit {
     activeRentals: 0, overdueRentals: 0, rentalRevenue: 0
   };
 
-  products: Product[] = [];
-  inventory: Inventory[] = [];
+  products: Product[]         = [];
+  inventory: Inventory[]      = [];
   stockMovements: StockMovement[] = [];
-  warehouses: Warehouse[] = [];
-  orders: Order[] = [];
-  rentals: Rental[] = [];
-  categories: Category[] = [];
+  warehouses: Warehouse[]     = [];
+  orders: Order[]             = [];
+  rentals: Rental[]           = [];
+  categories: Category[]      = [];
 
+  // ── AI Price ─────────────────────────────────────────────────────────────
   pricePrediction: PricePrediction | null = null;
   priceCheckLoading = false;
   priceWarning: 'above' | 'below' | 'ok' | null = null;
   private priceInput$ = new Subject<number>();
+
+  // ── NOUVEAU : Section statistiques ───────────────────────────────────────
+  orderStatistics: OrderStatisticsResponse[] = [];
+  statisticsLoading = false;
+
+  // ── NOUVEAU : Filtre avancé commandes ────────────────────────────────────
+  filteredOrdersAdvanced: any[] = [];
+  orderFilterStatus  = 'DELIVERED';
+  orderFilterSince   = '';
+  advancedFilterLoading = false;
+  advancedFilterApplied = false;
 
   constructor(
     private productService: ProductService,
@@ -111,55 +123,48 @@ export class SellerComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    // Date par défaut = 30 jours en arrière
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    this.orderFilterSince = d.toISOString().slice(0, 16); // format datetime-local
+
     this.loadAllData();
 
-    // ✅ Payload complet avec tous les champs ML
     this.priceInput$.pipe(
       debounceTime(800),
       distinctUntilChanged(),
       switchMap(price => {
-        if (!price || price <= 0) {
-          this.priceCheckLoading = false;
-          return of(null);
-        }
-
+        if (!price || price <= 0) { this.priceCheckLoading = false; return of(null); }
         const categoryName = this.categories.find(
           c => String(c.id) === String(this.productForm.categoryId)
         )?.name || 'Outdoor Accessories';
-
         const payload = {
           categoryName,
-          name:              this.productForm.name             || '',
-          brand:             this.productForm.brand            || 'Unknown',
-          tags:              this.productForm.tags             || [],
-          isFeatured:        this.productForm.isFeatured       || false,
-          isOnSale:          this.productForm.isOnSale         || false,
-          isRentable:        this.productForm.rentalAvailable  || false,
-          rentalPricePerDay: this.productForm.rentalPrice      || 0,
-          // ✅ Champs critiques pour la précision
-          supplierCost:      this.productForm.supplierCost     || 0,
-          competitorPrice:   this.productForm.compareAtPrice   || 0,
-          shippingCost:      this.productForm.shippingCost     || 0,
-          weight:            this.productForm.weight           || 0,
-          stockQuantity:     this.productForm.stockQuantity    || 0,
-          minStockLevel:     this.productForm.minStockLevel    || 0,
-          rating:            this.productForm.rating           || 3.0,
-          reviewCount:       this.productForm.reviewCount      || 0,
-          salesCount:        this.productForm.salesCount       || 0,
-          viewCount:         this.productForm.viewCount        || 0,
-          imagesCount:       this.productForm.imagesCount      || 1,
+          name:              this.productForm.name            || '',
+          brand:             this.productForm.brand           || 'Unknown',
+          tags:              this.productForm.tags            || [],
+          isFeatured:        this.productForm.isFeatured      || false,
+          isOnSale:          this.productForm.isOnSale        || false,
+          isRentable:        this.productForm.rentalAvailable || false,
+          rentalPricePerDay: this.productForm.rentalPrice     || 0,
+          supplierCost:      this.productForm.supplierCost    || 0,
+          competitorPrice:   this.productForm.compareAtPrice  || 0,
+          shippingCost:      this.productForm.shippingCost    || 0,
+          weight:            this.productForm.weight          || 0,
+          stockQuantity:     this.productForm.stockQuantity   || 0,
+          minStockLevel:     this.productForm.minStockLevel   || 0,
+          rating:            this.productForm.rating          || 3.0,
+          reviewCount:       this.productForm.reviewCount     || 0,
+          salesCount:        this.productForm.salesCount      || 0,
+          viewCount:         this.productForm.viewCount       || 0,
+          imagesCount:       this.productForm.imagesCount     || 1,
         };
-
         return this.http.post<any>('http://localhost:8000/predict-price', payload)
           .pipe(catchError(() => of(null)));
       })
     ).subscribe((res: any) => {
       this.priceCheckLoading = false;
-      if (!res) {
-        this.pricePrediction = null;
-        this.priceWarning = null;
-        return;
-      }
+      if (!res) { this.pricePrediction = null; this.priceWarning = null; return; }
       this.pricePrediction = {
         predictedPrice: res.predictedPrice,
         priceMin:       res.priceRange.min,
@@ -170,19 +175,15 @@ export class SellerComponent implements OnInit {
     });
   }
 
-  // ✅ Déclenche la vérification sur n'importe quel changement de champ
   onPriceChange() {
-    this.pricePrediction = null;
-    this.priceWarning = null;
+    this.pricePrediction = null; this.priceWarning = null;
     this.priceCheckLoading = true;
     this.priceInput$.next(this.productForm.price);
   }
 
-  // ✅ Déclenche aussi quand les champs ML changent (brand, supplierCost, etc.)
   onFieldChange() {
     if (this.productForm.price > 0) {
-      this.pricePrediction = null;
-      this.priceWarning = null;
+      this.pricePrediction = null; this.priceWarning = null;
       this.priceCheckLoading = true;
       this.priceInput$.next(this.productForm.price);
     }
@@ -197,53 +198,31 @@ export class SellerComponent implements OnInit {
     this.loadOrders();
     this.loadRentals();
     this.loadStockMovements();
+    this.loadOrderStatistics(); // ← NOUVEAU
   }
 
   evaluatePriceWarning(price: number) {
     if (!this.pricePrediction) return;
-    if (price > this.pricePrediction.priceMax) {
-      this.priceWarning = 'above';
-    } else if (price < this.pricePrediction.priceMin) {
-      this.priceWarning = 'below';
-    } else {
-      this.priceWarning = 'ok';
-    }
+    if (price > this.pricePrediction.priceMax)      this.priceWarning = 'above';
+    else if (price < this.pricePrediction.priceMin) this.priceWarning = 'below';
+    else                                             this.priceWarning = 'ok';
   }
 
-  applyAiPrice() {
-    this.productForm.price = this.pricePrediction?.predictedPrice;
-    this.priceWarning = 'ok';
-  }
+  applyAiPrice() { this.productForm.price = this.pricePrediction?.predictedPrice; this.priceWarning = 'ok'; }
 
   saveProductWithCheck() {
-    if (this.priceCheckLoading) {
-      alert('⏳ Please wait, AI price check is still loading...');
-      return;
-    }
-    if (!this.pricePrediction) {
-      this.saveProduct();
-      return;
-    }
+    if (this.priceCheckLoading) { alert('⏳ Please wait, AI price check is still loading...'); return; }
+    if (!this.pricePrediction) { this.saveProduct(); return; }
     if (this.priceWarning === 'above' || this.priceWarning === 'below') {
       const label = this.priceWarning === 'above'
         ? `ABOVE the suggested range (max: ${this.pricePrediction.priceMax} DT)`
         : `BELOW the suggested range (min: ${this.pricePrediction.priceMin} DT)`;
-      const confirmed = confirm(
-        `⚠️ Price Warning!\n\n` +
-        `Your price: ${this.productForm.price} DT\n` +
-        `AI suggested: ${this.pricePrediction.priceMin}–${this.pricePrediction.priceMax} DT\n\n` +
-        `Your price is ${label}.\n\nSave anyway?`
-      );
-      if (!confirmed) return;
+      if (!confirm(`⚠️ Price Warning!\n\nYour price: ${this.productForm.price} DT\nAI suggested: ${this.pricePrediction.priceMin}–${this.pricePrediction.priceMax} DT\n\nYour price is ${label}.\n\nSave anyway?`)) return;
     }
     this.saveProduct();
   }
 
-  resetPriceCheck() {
-    this.pricePrediction = null;
-    this.priceWarning = null;
-    this.priceCheckLoading = false;
-  }
+  resetPriceCheck() { this.pricePrediction = null; this.priceWarning = null; this.priceCheckLoading = false; }
 
   private toArray(data: any): any[] {
     if (Array.isArray(data)) return data;
@@ -255,9 +234,7 @@ export class SellerComponent implements OnInit {
   loadProducts() {
     this.isLoading = true;
     const userId = this.authService.getCurrentUser()?.id;
-    const load$ = userId
-      ? this.productService.getBySeller(userId, 0, 100)
-      : this.productService.getAll(0, 100);
+    const load$ = userId ? this.productService.getBySeller(userId, 0, 100) : this.productService.getAll(0, 100);
     load$.subscribe({
       next: (res: any) => { this.products = this.toArray(res); this.updateStats(); this.isLoading = false; },
       error: () => { this.errorMessage = 'Failed to load products'; this.products = []; this.isLoading = false; }
@@ -292,9 +269,7 @@ export class SellerComponent implements OnInit {
         next: (orders: any) => { this.orders = this.toArray(orders); this.updateStats(); },
         error: () => { this.orders = []; this.updateStats(); }
       });
-    } else {
-      this.orders = []; this.updateStats();
-    }
+    } else { this.orders = []; this.updateStats(); }
   }
 
   loadRentals() {
@@ -306,40 +281,78 @@ export class SellerComponent implements OnInit {
 
   loadStockMovements() { this.stockMovements = []; }
 
+  // ── NOUVEAU 1 : Charger les statistiques par statut ──────────────────────
+  loadOrderStatistics(): void {
+    this.statisticsLoading = true;
+    this.orderService.getStatisticsByStatus().subscribe({
+      next: (stats) => { this.orderStatistics = stats; this.statisticsLoading = false; },
+      error: () => { this.orderStatistics = []; this.statisticsLoading = false; }
+    });
+  }
+
+  // ── NOUVEAU 2 : Filtre avancé commandes ──────────────────────────────────
+  applyAdvancedOrderFilter(): void {
+    const userId = this.authService.getCurrentUser()?.id?.toString();
+    if (!userId) { alert('⚠️ User not found'); return; }
+    if (!this.orderFilterStatus || !this.orderFilterSince) { alert('⚠️ Please select a status and a date'); return; }
+    // Convertit "2025-01-01T12:00" → "2025-01-01T12:00:00" attendu par Spring
+    const sinceIso = this.orderFilterSince.length === 16 ? this.orderFilterSince + ':00' : this.orderFilterSince;
+    this.advancedFilterLoading = true;
+    this.advancedFilterApplied = false;
+    this.orderService.getFilteredOrders(userId, this.orderFilterStatus, sinceIso).subscribe({
+      next: (orders) => { this.filteredOrdersAdvanced = orders; this.advancedFilterLoading = false; this.advancedFilterApplied = true; },
+      error: () => { this.filteredOrdersAdvanced = []; this.advancedFilterLoading = false; this.advancedFilterApplied = true; }
+    });
+  }
+
+  resetAdvancedFilter(): void {
+    this.filteredOrdersAdvanced = [];
+    this.advancedFilterApplied  = false;
+    this.orderFilterStatus      = 'DELIVERED';
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    this.orderFilterSince = d.toISOString().slice(0, 16);
+  }
+
+  // ── Barre de volume pour le tableau stats ─────────────────────────────────
+  getStatBarWidth(count: number): number {
+    if (!this.orderStatistics.length) return 0;
+    const max = Math.max(...this.orderStatistics.map(s => s.orderCount));
+    return max > 0 ? Math.round((count / max) * 100) : 0;
+  }
+  // Calcule le total de toutes les commandes (somme de tous les statuts)
+  getTotalOrderCount(): number {
+    return this.orderStatistics.reduce((sum, s) => sum + s.orderCount, 0);
+  }
+
   // ── Filtered getters ──────────────────────────────────────────────────────
 
   get filteredProducts(): Product[] {
-    let filtered = [...this.products];
-    if (this.searchTerm) {
-      filtered = filtered.filter(p =>
-        p.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(this.searchTerm.toLowerCase())
-      );
-    }
-    if (this.filterCategory) filtered = filtered.filter(p => p.categoryId === this.filterCategory);
-    if (this.filterStatus === 'active') filtered = filtered.filter(p => p.isActive);
-    else if (this.filterStatus === 'inactive') filtered = filtered.filter(p => !p.isActive);
-    if (this.filterRental === 'rental') filtered = filtered.filter(p => p.rentalAvailable);
-    else if (this.filterRental === 'sale') filtered = filtered.filter(p => !p.rentalAvailable);
-    return filtered;
+    let f = [...this.products];
+    if (this.searchTerm)     f = f.filter(p => p.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) || p.sku?.toLowerCase().includes(this.searchTerm.toLowerCase()));
+    if (this.filterCategory) f = f.filter(p => p.categoryId === this.filterCategory);
+    if (this.filterStatus === 'active')   f = f.filter(p => p.isActive);
+    if (this.filterStatus === 'inactive') f = f.filter(p => !p.isActive);
+    if (this.filterRental === 'rental')   f = f.filter(p => p.rentalAvailable);
+    if (this.filterRental === 'sale')     f = f.filter(p => !p.rentalAvailable);
+    return f;
   }
 
   get filteredInventory(): Inventory[] {
-    let filtered = [...this.inventory];
-    if (this.stockFilterWarehouse) filtered = filtered.filter(i => i.warehouseId === this.stockFilterWarehouse);
-    return filtered;
+    let f = [...this.inventory];
+    if (this.stockFilterWarehouse) f = f.filter(i => i.warehouseId === this.stockFilterWarehouse);
+    return f;
   }
 
   get filteredOrders(): Order[] {
-    let filtered = [...this.orders];
-    if (this.orderStatusFilter) filtered = filtered.filter(o => o.status === this.orderStatusFilter);
-    return filtered;
+    let f = [...this.orders];
+    if (this.orderStatusFilter) f = f.filter(o => o.status === this.orderStatusFilter);
+    return f;
   }
 
   get filteredRentals(): Rental[] {
-    let filtered = [...this.rentals];
-    if (this.rentalStatusFilter) filtered = filtered.filter(r => r.status === this.rentalStatusFilter);
-    return filtered;
+    let f = [...this.rentals];
+    if (this.rentalStatusFilter) f = f.filter(r => r.status === this.rentalStatusFilter);
+    return f;
   }
 
   get lowStockItems(): Inventory[] {
@@ -354,48 +367,30 @@ export class SellerComponent implements OnInit {
 
   // ── Product CRUD ──────────────────────────────────────────────────────────
 
-  openProductForm() {
-    this.showProductForm = true;
-    this.editingProductId = null;
-    this.resetProductForm();
-  }
+  openProductForm() { this.showProductForm = true; this.editingProductId = null; this.resetProductForm(); }
 
-  // ✅ resetProductForm avec tous les champs ML
   resetProductForm() {
     this.productForm = {
       name: '', description: '', shortDescription: '', price: 0, compareAtPrice: 0,
       sku: '', categoryId: '', tags: [], tagsInput: '', isActive: true, isFeatured: false,
       isOnSale: false, rentalAvailable: false, rentalPrice: 0, depositAmount: 0, maxRentalDays: 30,
-      // Champs ML
       brand: 'Unknown', supplierCost: 0, shippingCost: 0, weight: 0,
-      stockQuantity: 0, minStockLevel: 0, rating: 3.0,
-      reviewCount: 0, salesCount: 0, viewCount: 0, imagesCount: 1,
+      stockQuantity: 0, minStockLevel: 0, rating: 3.0, reviewCount: 0, salesCount: 0, viewCount: 0, imagesCount: 1,
     };
     this.resetPriceCheck();
   }
 
   saveProduct() {
-    if (this.productForm.tagsInput) {
-      this.productForm.tags = this.productForm.tagsInput.split(',').map((t: string) => t.trim());
-    }
-    if (!this.productForm.sku) {
-      this.productForm.sku = `PRD-${Date.now().toString().slice(-6)}`;
-    }
+    if (this.productForm.tagsInput) this.productForm.tags = this.productForm.tagsInput.split(',').map((t: string) => t.trim());
+    if (!this.productForm.sku) this.productForm.sku = `PRD-${Date.now().toString().slice(-6)}`;
     const sellerId = Number(this.authService.getCurrentUser()?.id ?? 0);
     const productData = {
-      name:              this.productForm.name,
-      description:       this.productForm.description,
-      price:             this.productForm.price,
-      originalPrice:     this.productForm.compareAtPrice || undefined,
-      sku:               this.productForm.sku,
-      categoryId:        this.productForm.categoryId ? Number(this.productForm.categoryId) : undefined,
-      sellerId,
-      tags:              this.productForm.tags,
-      images:            [] as string[],
-      isFeatured:        this.productForm.isFeatured,
-      isRentable:        this.productForm.rentalAvailable,
-      rentalPricePerDay: this.productForm.rentalPrice || undefined,
-      stockQuantity:     0
+      name: this.productForm.name, description: this.productForm.description,
+      price: this.productForm.price, originalPrice: this.productForm.compareAtPrice || undefined,
+      sku: this.productForm.sku, categoryId: this.productForm.categoryId ? Number(this.productForm.categoryId) : undefined,
+      sellerId, tags: this.productForm.tags, images: [] as string[],
+      isFeatured: this.productForm.isFeatured, isRentable: this.productForm.rentalAvailable,
+      rentalPricePerDay: this.productForm.rentalPrice || undefined, stockQuantity: 0
     };
     this.isLoading = true;
     if (this.editingProductId) {
@@ -411,11 +406,7 @@ export class SellerComponent implements OnInit {
     }
   }
 
-  editProduct(product: Product) {
-    this.productForm = { ...product, tagsInput: product.tags?.join(', ') || '' };
-    this.editingProductId = product.id;
-    this.showProductForm = true;
-  }
+  editProduct(product: Product) { this.productForm = { ...product, tagsInput: product.tags?.join(', ') || '' }; this.editingProductId = product.id; this.showProductForm = true; }
 
   deleteProduct(id: string) {
     if (confirm('Delete this product?')) {
@@ -433,61 +424,38 @@ export class SellerComponent implements OnInit {
     });
   }
 
-  cancelProductForm() {
-    this.showProductForm = false;
-    this.editingProductId = null;
-    this.resetProductForm();
-  }
+  cancelProductForm() { this.showProductForm = false; this.editingProductId = null; this.resetProductForm(); }
 
   // ── Inventory / Stock ─────────────────────────────────────────────────────
 
-  openRestockForm(inv: Inventory) {
-    this.restockForm = { productName: inv.productName, productId: inv.productId, warehouseId: inv.warehouseId, quantity: 0, notes: '' };
-    this.showRestockForm = true;
-  }
+  openRestockForm(inv: Inventory) { this.restockForm = { productName: inv.productName, productId: inv.productId, warehouseId: inv.warehouseId, quantity: 0, notes: '' }; this.showRestockForm = true; }
 
   saveRestock() {
     if (this.restockForm.quantity <= 0) { alert('⚠️ Quantity must be greater than 0'); return; }
-    const movementData: CreateStockMovementDto = {
-      productId: this.restockForm.productId, warehouseId: this.restockForm.warehouseId,
-      type: 'IN', quantity: this.restockForm.quantity, reason: this.restockForm.notes || 'Manual restock'
-    };
+    const movementData: CreateStockMovementDto = { productId: this.restockForm.productId, warehouseId: this.restockForm.warehouseId, type: 'IN', quantity: this.restockForm.quantity, reason: this.restockForm.notes || 'Manual restock' };
     this.inventoryService.createMovement(movementData).subscribe({
       next: () => { alert(`✅ Restocked ${this.restockForm.quantity} units successfully!`); this.showRestockForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to restock: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
-  openStockMovementForm() {
-    this.stockMovementForm = { productId: '', type: 'IN', quantity: 0, reason: '', locationCode: '', warehouseId: this.warehouses[0]?.id || '' };
-    this.showStockMovementForm = true;
-  }
+  openStockMovementForm() { this.stockMovementForm = { productId: '', type: 'IN', quantity: 0, reason: '', locationCode: '', warehouseId: this.warehouses[0]?.id || '' }; this.showStockMovementForm = true; }
 
   saveStockMovement() {
     if (!this.stockMovementForm.productId || this.stockMovementForm.quantity === 0) { alert('⚠️ Please fill all required fields'); return; }
-    const movementData: CreateStockMovementDto = {
-      productId: this.stockMovementForm.productId, warehouseId: this.stockMovementForm.warehouseId,
-      type: this.stockMovementForm.type, quantity: Math.abs(this.stockMovementForm.quantity),
-      reason: this.stockMovementForm.reason, locationCode: this.stockMovementForm.locationCode
-    };
+    const movementData: CreateStockMovementDto = { productId: this.stockMovementForm.productId, warehouseId: this.stockMovementForm.warehouseId, type: this.stockMovementForm.type, quantity: Math.abs(this.stockMovementForm.quantity), reason: this.stockMovementForm.reason, locationCode: this.stockMovementForm.locationCode };
     this.inventoryService.createMovement(movementData).subscribe({
       next: () => { alert('✅ Stock movement recorded!'); this.showStockMovementForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to record: ' + (err.error?.message || err.message || 'Unknown error'))
     });
   }
 
-  openStockAlertForm(inv: Inventory) {
-    this.stockAlertForm = { inventoryId: inv.id, productName: inv.productName, currentThreshold: inv.lowStockThreshold, newThreshold: inv.lowStockThreshold };
-    this.editingInventoryId = inv.id;
-    this.showStockAlertForm = true;
-  }
+  openStockAlertForm(inv: Inventory) { this.stockAlertForm = { inventoryId: inv.id, productName: inv.productName, currentThreshold: inv.lowStockThreshold, newThreshold: inv.lowStockThreshold }; this.editingInventoryId = inv.id; this.showStockAlertForm = true; }
 
   saveStockAlert() {
     if (this.stockAlertForm.newThreshold < 0) { alert('⚠️ Threshold cannot be negative'); return; }
     const currentItem = this.inventory.find(i => i.id === this.editingInventoryId);
-    this.inventoryService.updateStock(this.editingInventoryId!, {
-      currentStock: currentItem?.currentStock || 0, lowStockThreshold: this.stockAlertForm.newThreshold
-    }).subscribe({
+    this.inventoryService.updateStock(this.editingInventoryId!, { currentStock: currentItem?.currentStock || 0, lowStockThreshold: this.stockAlertForm.newThreshold }).subscribe({
       next: () => { alert(`✅ Threshold updated to ${this.stockAlertForm.newThreshold} units`); this.showStockAlertForm = false; this.loadInventory(); },
       error: (err) => alert('❌ Failed to update: ' + (err.error?.message || err.message || 'Unknown error'))
     });
@@ -518,22 +486,9 @@ export class SellerComponent implements OnInit {
 
   // ── Categories ────────────────────────────────────────────────────────────
 
-  selectCategoryToAddProduct(category: Category) {
-    this.selectedCategoryId = category.id;
-    this.activeSubSection = 'products';
-    this.productForm.categoryId = category.id;
-    this.openProductForm();
-  }
-
-  getCategoryName(categoryId: string): string {
-    return this.categories.find(c => c.id === categoryId)?.name || '';
-  }
-
-  getFilteredProductsByCategory(): Product[] {
-    let filtered = this.filteredProducts;
-    if (this.selectedCategoryId) filtered = filtered.filter(p => p.categoryId === this.selectedCategoryId);
-    return filtered;
-  }
+  selectCategoryToAddProduct(category: Category) { this.selectedCategoryId = category.id; this.activeSubSection = 'products'; this.productForm.categoryId = category.id; this.openProductForm(); }
+  getCategoryName(categoryId: string): string { return this.categories.find(c => c.id === categoryId)?.name || ''; }
+  getFilteredProductsByCategory(): Product[] { let f = this.filteredProducts; if (this.selectedCategoryId) f = f.filter(p => p.categoryId === this.selectedCategoryId); return f; }
 
   saveCategory() {
     if (!this.categoryForm.name) { alert('⚠️ Category name is required'); return; }
@@ -563,9 +518,7 @@ export class SellerComponent implements OnInit {
     });
   }
 
-  viewOrderDetails(order: Order) {
-    alert(`Order #${order.id}\nCustomer: ${order.customerName}\nTotal: $${order.totalAmount}\nStatus: ${order.status}`);
-  }
+  viewOrderDetails(order: Order) { alert(`Order #${order.id}\nCustomer: ${order.customerName}\nTotal: $${order.totalAmount}\nStatus: ${order.status}`); }
 
   cancelOrder(order: Order) {
     if (confirm(`Cancel order #${order.id}?`)) {
@@ -578,9 +531,7 @@ export class SellerComponent implements OnInit {
 
   // ── Rentals ───────────────────────────────────────────────────────────────
 
-  viewRentalDetails(rental: Rental) {
-    alert(`Rental #${rental.id}\nProduct: ${rental.productName}\nCustomer: ${rental.customerName}\nStatus: ${rental.status}`);
-  }
+  viewRentalDetails(rental: Rental) { alert(`Rental #${rental.id}\nProduct: ${rental.productName}\nCustomer: ${rental.customerName}\nStatus: ${rental.status}`); }
 
   markRentalReturned(rental: Rental) {
     if (confirm(`Mark rental ${rental.id} as returned?`)) {
@@ -619,11 +570,7 @@ export class SellerComponent implements OnInit {
 
   saveWarehouse() {
     if (!this.warehouseForm.name || !this.warehouseForm.code) { alert('⚠️ Name and code are required'); return; }
-    const warehouseData: CreateWarehouseDto = {
-      name: this.warehouseForm.name, code: this.warehouseForm.code, address: this.warehouseForm.address,
-      city: this.warehouseForm.city, country: this.warehouseForm.country, phone: this.warehouseForm.phone,
-      email: this.warehouseForm.email, isActive: this.warehouseForm.isActive
-    };
+    const warehouseData: CreateWarehouseDto = { name: this.warehouseForm.name, code: this.warehouseForm.code, address: this.warehouseForm.address, city: this.warehouseForm.city, country: this.warehouseForm.country, phone: this.warehouseForm.phone, email: this.warehouseForm.email, isActive: this.warehouseForm.isActive };
     if (this.editingWarehouseId) {
       this.warehouseService.update(this.editingWarehouseId, warehouseData).subscribe({
         next: () => { alert('✅ Warehouse updated!'); this.showWarehouseForm = false; this.loadWarehouses(); },
@@ -664,10 +611,7 @@ export class SellerComponent implements OnInit {
     this.stats.totalRevenue   = this.orders.filter(o => o.status !== 'CANCELLED').reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     this.stats.lowStockItems  = this.lowStockItems.length;
     this.stats.totalStock     = this.inventory.reduce((sum, i) => sum + (i.currentStock || 0), 0);
-    this.stats.stockValue     = this.products.reduce((sum, p) => {
-      const stock = this.inventory.find(i => i.productId === p.id)?.currentStock || 0;
-      return sum + ((p.price || 0) * stock);
-    }, 0);
+    this.stats.stockValue     = this.products.reduce((sum, p) => { const stock = this.inventory.find(i => i.productId === p.id)?.currentStock || 0; return sum + ((p.price || 0) * stock); }, 0);
     this.stats.activeRentals  = this.rentals.filter(r => r.status === 'ACTIVE').length;
     this.stats.overdueRentals = this.rentals.filter(r => r.status === 'OVERDUE').length;
     this.stats.rentalRevenue  = this.rentals.filter(r => r.status !== 'CANCELLED').reduce((sum, r) => sum + (r.totalCost || 0), 0);
@@ -675,31 +619,22 @@ export class SellerComponent implements OnInit {
 
   getOrderStatusBadge(status: string): string {
     const badges: { [key: string]: string } = {
-      'PENDING': 'bg-yellow-100 text-yellow-800', 'PROCESSING': 'bg-blue-100 text-blue-800',
-      'SHIPPED': 'bg-purple-100 text-purple-800', 'DELIVERED': 'bg-green-100 text-green-800',
-      'CANCELLED': 'bg-red-100 text-red-800'
+      'PENDING': 'bg-yellow-100 text-yellow-800', 'CONFIRMED': 'bg-teal-100 text-teal-800',
+      'PROCESSING': 'bg-blue-100 text-blue-800',  'SHIPPED': 'bg-purple-100 text-purple-800',
+      'DELIVERED': 'bg-green-100 text-green-800',  'CANCELLED': 'bg-red-100 text-red-800'
     };
     return badges[status] || 'bg-gray-100 text-gray-800';
   }
 
-  getWarehouseStockCount(warehouseId: string): number {
-    if (!Array.isArray(this.inventory)) return 0;
-    return this.inventory.filter(i => i.warehouseId === warehouseId).length;
-  }
+  getWarehouseStockCount(warehouseId: string): number { if (!Array.isArray(this.inventory)) return 0; return this.inventory.filter(i => i.warehouseId === warehouseId).length; }
 
   getRentalStatusBadge(status: string): string {
-    const badges: { [key: string]: string } = {
-      'ACTIVE': 'bg-green-100 text-green-800', 'OVERDUE': 'bg-red-100 text-red-800',
-      'COMPLETED': 'bg-blue-100 text-blue-800', 'CANCELLED': 'bg-gray-100 text-gray-800'
-    };
+    const badges: { [key: string]: string } = { 'ACTIVE': 'bg-green-100 text-green-800', 'OVERDUE': 'bg-red-100 text-red-800', 'COMPLETED': 'bg-blue-100 text-blue-800', 'CANCELLED': 'bg-gray-100 text-gray-800' };
     return badges[status] || 'bg-gray-100 text-gray-800';
   }
 
   getMovementTypeBadge(type: string): string {
-    const badges: { [key: string]: string } = {
-      'IN': 'bg-green-100 text-green-800', 'OUT': 'bg-red-100 text-red-800',
-      'ADJUSTMENT': 'bg-blue-100 text-blue-800'
-    };
+    const badges: { [key: string]: string } = { 'IN': 'bg-green-100 text-green-800', 'OUT': 'bg-red-100 text-red-800', 'ADJUSTMENT': 'bg-blue-100 text-blue-800' };
     return badges[type] || 'bg-gray-100 text-gray-800';
   }
 }
