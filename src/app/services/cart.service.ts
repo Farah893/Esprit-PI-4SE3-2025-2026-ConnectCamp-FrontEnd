@@ -16,6 +16,15 @@ export class CartService {
   private cartSubject = new BehaviorSubject<CartItem[]>([]);
   cart$ = this.cartSubject.asObservable();
 
+  private cartTotalSubject = new BehaviorSubject<number>(0);
+  cartTotal$ = this.cartTotalSubject.asObservable();
+
+  private cartDiscountSubject = new BehaviorSubject<number>(0);
+  cartDiscount$ = this.cartDiscountSubject.asObservable();
+
+  private cartFinalSubject = new BehaviorSubject<number>(0);
+  cartFinal$ = this.cartFinalSubject.asObservable();
+
   constructor(
     private http: HttpClient,
     @Inject(PLATFORM_ID) platformId: Object
@@ -174,18 +183,22 @@ export class CartService {
 
     return this.http.get<any>(`${this.apiUrl}/${userId}`).pipe(
       map(response => {
-        // Backend returns ApiResponse<CartResponse> with items inside
         const raw = response?.data || response;
         const items: CartItem[] = (raw?.items || []).map((i: any) => ({
           productId: String(i.productId || i.product?.id),
           productName: i.productName || i.product?.name || '',
-          price: i.price || i.unitPrice || 0,
+          price: i.unitPrice || i.price || 0,
           quantity: i.quantity || 1,
-          image: i.image || i.product?.thumbnail || '',
+          image: i.productThumbnail || i.image || i.product?.thumbnail || '',
           type: i.type || 'PURCHASE',
           rentalDays: i.rentalDays
         }));
+        
         this.cartSubject.next(items);
+        this.cartTotalSubject.next(raw?.totalAmount || 0);
+        this.cartDiscountSubject.next(raw?.discountAmount || 0);
+        this.cartFinalSubject.next(raw?.finalAmount || 0);
+        
         this.saveLocalCart(items);
         return items;
       }),

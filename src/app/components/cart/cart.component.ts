@@ -28,6 +28,11 @@ export class CartComponent implements OnInit, OnDestroy {
     
     private cartSub: Subscription | null = null;
     cartItems: LocalCartItem[] = [];
+    
+    // Totals from service
+    serverSubtotal = 0;
+    serverDiscount = 0;
+    serverTotal = 0;
 
     constructor(
         private location: Location,
@@ -38,10 +43,8 @@ export class CartComponent implements OnInit, OnDestroy {
     ) { }
 
     ngOnInit(): void {
-        // Fetch cart from backend if logged in, or local storage
         this.cartService.fetchCart().subscribe();
 
-        // Listen to cart changes dynamically
         this.cartSub = this.cartService.cart$.subscribe(items => {
             this.cartItems = items.map(item => ({
                 id: item.productId,
@@ -53,12 +56,12 @@ export class CartComponent implements OnInit, OnDestroy {
                 unitPrice: item.price,
                 originalType: item.type
             }));
-            
-            // Re-apply promo code if subtotal changes to recalculate correctly
-            if (this.promoCode && this.promoResult?.valide) {
-                this.applyPromo();
-            }
         });
+
+        // Sync totals
+        this.cartService.cartTotal$.subscribe(v => this.serverSubtotal = v);
+        this.cartService.cartDiscount$.subscribe(v => this.serverDiscount = v);
+        this.cartService.cartFinal$.subscribe(v => this.serverTotal = v);
 
         this.route.queryParams.subscribe(params => {
             if (params['code']) {
@@ -69,9 +72,7 @@ export class CartComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy(): void {
-        if (this.cartSub) {
-            this.cartSub.unsubscribe();
-        }
+        if (this.cartSub) this.cartSub.unsubscribe();
     }
 
     // ── Promo code ────────────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ export class CartComponent implements OnInit, OnDestroy {
     promoResult: { valide: boolean; message: string; reduction?: number; montantFinal?: number; promotionName?: string } | null = null;
 
     get discount(): number {
-        return this.promoResult?.valide ? (this.promoResult.reduction ?? 0) : 0;
+        return this.serverDiscount > 0 ? this.serverDiscount : (this.promoResult?.reduction || 0);
     }
 
     applyPromo(): void {
@@ -88,17 +89,21 @@ export class CartComponent implements OnInit, OnDestroy {
         this.promoLoading = true;
         this.promoResult = null;
         
-        // If cart is empty, don't even call backend
         if (this.subtotal === 0) {
-            this.promoResult = { valide: false, message: 'Panier vide. Ajoutez des articles.' };
+            this.promoResult = { valide: false, message: 'Panier vide.' };
             this.promoLoading = false;
             return;
         }
 
         this.promotionService.validateCode(this.promoCode.trim(), this.subtotal).subscribe({
-            next: (res) => { this.promoResult = res; this.promoLoading = false; },
+            next: (res) => { 
+                this.promoResult = res; 
+                this.promoLoading = false;
+                // Refresh cart to get backend-calculated discount
+                this.cartService.fetchCart().subscribe();
+            },
             error: () => {
-                this.promoResult = { valide: false, message: 'Code invalide ou conditions non remplies.' };
+                this.promoResult = { valide: false, message: 'Code invalide.' };
                 this.promoLoading = false;
             }
         });
@@ -107,11 +112,12 @@ export class CartComponent implements OnInit, OnDestroy {
     removePromo(): void {
         this.promoCode = '';
         this.promoResult = null;
+        this.cartService.fetchCart().subscribe();
     }
 
     // ── Cart items ────────────────────────────────────────────────────────────
     get subtotal(): number {
-        return this.cartItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+        return this.serverSubtotal > 0 ? this.serverSubtotal : this.cartItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
     }
 
     shipping = 15.00;
@@ -120,6 +126,7 @@ export class CartComponent implements OnInit, OnDestroy {
     get tax(): number { return this.subtotal > 0 ? this.subtotal * this.taxRate : 0; }
 
     get total(): number {
+        if (this.serverTotal > 0) return this.serverTotal;
         if (this.subtotal === 0) return 0;
         return Math.max(0, this.subtotal + this.shipping + this.tax - this.discount);
     }
