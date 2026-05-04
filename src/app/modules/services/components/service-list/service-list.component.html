@@ -319,9 +319,13 @@
           </div>
 
           <!-- Organizer Action -->
-          <button *ngIf="isOrganizer()" (click)="onSelectForEvent(service)"
-            class="w-full bg-cream border-2 border-forest text-forest hover:bg-forest hover:text-cream py-3 rounded-xl font-black text-xs transition-all uppercase flex items-center justify-center gap-2">
-            <i class="fas fa-check-circle"></i> Select for {{ selectedEventId ? 'Event' : 'Selection' }}
+          <button *ngIf="isOrganizer()" (click)="!isServiceSelected(service.id) && onSelectForEvent(service)"
+            [ngClass]="isServiceSelected(service.id) 
+              ? 'bg-gray-200 border-2 border-gray-200 text-gray-500 cursor-not-allowed shadow-inner' 
+              : 'bg-cream border-2 border-forest text-forest hover:bg-forest hover:text-cream shadow-sm'"
+            class="w-full py-3 rounded-xl font-black text-xs transition-all uppercase flex items-center justify-center gap-2">
+            <i class="fas" [ngClass]="isServiceSelected(service.id) ? 'fa-check' : 'fa-check-circle'"></i> 
+            {{ isServiceSelected(service.id) ? 'Already Selected' : 'Select for ' + (selectedEventId ? 'Event' : 'Selection') }}
           </button>
 
           <!-- User Action: Add to Cart -->

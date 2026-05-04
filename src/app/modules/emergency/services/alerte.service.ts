@@ -40,7 +40,7 @@ export class AlerteService {
     getMyAlerts(): Observable<Alerte[]> {
         const params = new HttpParams().set('reporterId', this.currentUserId);
         return this.http.get<any>(`${this.apiUrl}/my-alerts`, { params }).pipe(
-            map(response => response.data.content)
+            map(response => response.data)
         );
     }
 

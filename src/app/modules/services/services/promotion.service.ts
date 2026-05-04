@@ -40,10 +40,15 @@ export class PromotionService {
     }
 
     validateCode(code: string, amount: number, userId?: number): Observable<any> {
-        let url = `${this.apiUrl}/validate?code=${encodeURIComponent(code)}&montant=${amount}`;
-        if (userId) url += `&userId=${userId}`;
+        let url = `${environment.apiUrl}/api/coupons/validate?code=${encodeURIComponent(code)}&orderAmount=${amount}`;
         return this.http.post<any>(url, {}).pipe(
-            map(response => response?.data ?? response)
+            map(response => {
+                const data = response?.data;
+                if (data) {
+                    return { valide: true, message: 'Code promo valide !', reduction: data.discount, montantFinal: data.finalAmount };
+                }
+                return { valide: false, message: 'Code invalide.' };
+            })
         );
     }
 

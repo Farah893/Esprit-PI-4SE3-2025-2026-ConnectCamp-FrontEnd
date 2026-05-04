@@ -33,6 +33,7 @@ export class ServiceListComponent implements OnInit {
     searchTerm = '';
     userEvents: Event[] = [];
     selectedEventId: number | null = null;
+    selectedServiceIds: Set<number> = new Set();
     
     // AI Reputation State
     reputationResults: Record<number, string> = {};
@@ -177,8 +178,10 @@ export class ServiceListComponent implements OnInit {
                 
                 if (this.userEvents.length > 0) {
                     this.selectedEventId = this.userEvents[0].id;
+                    this.selectedServiceIds.clear();
                 } else {
                     this.selectedEventId = null;
+                    this.selectedServiceIds.clear();
                 }
             },
             error: (err) => {
@@ -191,6 +194,7 @@ export class ServiceListComponent implements OnInit {
     onEventChange(eventId: any): void {
         console.log('Event selection changed to:', eventId);
         this.selectedEventId = eventId;
+        this.selectedServiceIds.clear();
     }
 
     onSelectForEvent(service: Service): void {
@@ -217,6 +221,7 @@ export class ServiceListComponent implements OnInit {
 
         this.eventService.addRequestedService(this.selectedEventId, request as any).subscribe({
             next: () => {
+                this.selectedServiceIds.add(service.id);
                 alert(`✅ ${service.name} has been linked to your event!`);
             },
             error: (err) => {
@@ -224,6 +229,10 @@ export class ServiceListComponent implements OnInit {
                 alert('Failed to link service to event.');
             }
         });
+    }
+
+    isServiceSelected(serviceId: number): boolean {
+        return this.selectedServiceIds.has(serviceId);
     }
 
     deleteService(id: number): void {

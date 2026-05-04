@@ -109,7 +109,7 @@ export class AlerteListComponent implements OnInit {
         this.loading = true;
         this.alerteService.getMyAlerts().subscribe({
             next: (alerts) => {
-                this.myAlerts = alerts;
+                this.myAlerts = alerts || [];
                 this.loading = false;
             },
             error: (err) => {

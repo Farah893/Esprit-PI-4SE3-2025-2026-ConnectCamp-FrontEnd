@@ -1,17 +1,20 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { PromotionService } from '../../modules/services/services/promotion.service';
+import { CartService } from '../../services/cart.service';
+import { Subscription } from 'rxjs';
 
-interface CartItem {
-    id: number;
+interface LocalCartItem {
+    id: string;
     name: string;
     image: string;
     type: 'Purchase' | 'Rental';
     rentalDuration?: string;
     quantity: number;
     unitPrice: number;
+    originalType: 'PURCHASE' | 'RENTAL';
 }
 
 @Component({
@@ -21,20 +24,54 @@ interface CartItem {
     templateUrl: './cart.component.html',
     styleUrls: ['./cart.component.css']
 })
-export class CartComponent implements OnInit {
+export class CartComponent implements OnInit, OnDestroy {
+    
+    private cartSub: Subscription | null = null;
+    cartItems: LocalCartItem[] = [];
+
     constructor(
         private location: Location,
         private route: ActivatedRoute,
-        private promotionService: PromotionService
+        private promotionService: PromotionService,
+        private cartService: CartService,
+        private router: Router
     ) { }
 
     ngOnInit(): void {
+        // Fetch cart from backend if logged in, or local storage
+        this.cartService.fetchCart().subscribe();
+
+        // Listen to cart changes dynamically
+        this.cartSub = this.cartService.cart$.subscribe(items => {
+            this.cartItems = items.map(item => ({
+                id: item.productId,
+                name: item.productName,
+                image: this.cartService.getImageUrl(item.image),
+                type: item.type === 'RENTAL' ? 'Rental' : 'Purchase',
+                rentalDuration: item.rentalDays ? `${item.rentalDays} days` : undefined,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                originalType: item.type
+            }));
+            
+            // Re-apply promo code if subtotal changes to recalculate correctly
+            if (this.promoCode && this.promoResult?.valide) {
+                this.applyPromo();
+            }
+        });
+
         this.route.queryParams.subscribe(params => {
             if (params['code']) {
                 this.promoCode = params['code'];
                 this.applyPromo();
             }
         });
+    }
+
+    ngOnDestroy(): void {
+        if (this.cartSub) {
+            this.cartSub.unsubscribe();
+        }
     }
 
     // ── Promo code ────────────────────────────────────────────────────────────
@@ -50,10 +87,18 @@ export class CartComponent implements OnInit {
         if (!this.promoCode.trim()) return;
         this.promoLoading = true;
         this.promoResult = null;
+        
+        // If cart is empty, don't even call backend
+        if (this.subtotal === 0) {
+            this.promoResult = { valide: false, message: 'Panier vide. Ajoutez des articles.' };
+            this.promoLoading = false;
+            return;
+        }
+
         this.promotionService.validateCode(this.promoCode.trim(), this.subtotal).subscribe({
             next: (res) => { this.promoResult = res; this.promoLoading = false; },
             error: () => {
-                this.promoResult = { valide: false, message: 'Erreur lors de la vérification du code.' };
+                this.promoResult = { valide: false, message: 'Code invalide ou conditions non remplies.' };
                 this.promoLoading = false;
             }
         });
@@ -65,33 +110,43 @@ export class CartComponent implements OnInit {
     }
 
     // ── Cart items ────────────────────────────────────────────────────────────
-    cartItems: CartItem[] = [
-        { id: 1, name: "Waterproof Hiking Boots - Men's", image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1080', type: 'Purchase', quantity: 2, unitPrice: 143.10 },
-        { id: 2, name: 'Camping Cookware Set - 4 Pieces', image: 'https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?q=80&w=1080', type: 'Rental', rentalDuration: '7 days', quantity: 1, unitPrice: 36.00 }
-    ];
-
     get subtotal(): number {
-        return this.cartItems.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
+        return this.cartItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
     }
 
     shipping = 15.00;
     taxRate = 0.10;
 
-    get tax(): number { return this.subtotal * this.taxRate; }
+    get tax(): number { return this.subtotal > 0 ? this.subtotal * this.taxRate : 0; }
 
     get total(): number {
+        if (this.subtotal === 0) return 0;
         return Math.max(0, this.subtotal + this.shipping + this.tax - this.discount);
     }
 
     get pointsToEarn(): number { return Math.floor(this.total); }
 
-    incrementQuantity(item: CartItem) { item.quantity++; }
+    incrementQuantity(item: LocalCartItem) { 
+        this.cartService.updateQuantity(item.id, item.quantity + 1, item.originalType).subscribe();
+    }
 
-    decrementQuantity(item: CartItem) { if (item.quantity > 1) item.quantity--; }
+    decrementQuantity(item: LocalCartItem) { 
+        if (item.quantity > 1) {
+            this.cartService.updateQuantity(item.id, item.quantity - 1, item.originalType).subscribe();
+        }
+    }
 
-    removeItem(item: CartItem) { this.cartItems = this.cartItems.filter(i => i.id !== item.id); }
+    removeItem(item: LocalCartItem) { 
+        this.cartService.removeItem(item.id, item.originalType).subscribe();
+    }
 
-    clearCart() { this.cartItems = []; this.orderSuccess = false; }
+    clearCart() { 
+        if(confirm('Voulez-vous vraiment vider votre panier ?')) {
+            this.cartService.clearCart().subscribe();
+            this.removePromo();
+            this.orderSuccess = false;
+        }
+    }
 
     // ── Payment ───────────────────────────────────────────────────────────────
     selectedPayment: 'wallet' | 'card' = 'wallet';
@@ -152,9 +207,10 @@ export class CartComponent implements OnInit {
             this.orderNumber = 'CC-' + Date.now().toString().slice(-8);
             this.orderSuccess = true;
             this.payLoading = false;
-            this.cartItems = [];
-            this.promoCode = '';
-            this.promoResult = null;
+            
+            // Clear actual cart on success
+            this.cartService.clearCart().subscribe();
+            this.removePromo();
         }, 1500);
     }
 

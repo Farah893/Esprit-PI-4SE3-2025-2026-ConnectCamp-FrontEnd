@@ -200,7 +200,7 @@
                 </div>
             </div>
 
-            @if (myAlerts.length > 0) {
+            @if (myAlerts && myAlerts.length > 0) {
             <div class="grid grid-cols-1 gap-6">
                 @for (alert of myAlerts; track alert.id) {
                 <div
