@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, of } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Wallet, WalletTransaction, AddFundsDto } from '../models/api.models';
 
@@ -23,31 +23,52 @@ export class WalletService {
   }
 
   getMyWallet(): Observable<Wallet> {
-    return this.http.get<ApiResponse<Wallet>>(this.apiUrl)
+    const userId = this.getUserId();
+    if (!userId) return of({} as Wallet);
+    return this.http.get<ApiResponse<Wallet>>(`${this.apiUrl}/user/${userId}`)
       .pipe(map(res => this.extractData(res)));
   }
 
   getBalance(): Observable<{ balance: number; loyaltyPoints: number }> {
-    // Balance comes from the main wallet endpoint
-    return this.http.get<ApiResponse<Wallet>>(this.apiUrl)
+    const userId = this.getUserId();
+    if (!userId) return of({ balance: 0, loyaltyPoints: 0 });
+    return this.http.get<ApiResponse<number>>(`${this.apiUrl}/user/${userId}/balance`)
       .pipe(map(res => {
-        const wallet = this.extractData(res);
-        return { balance: wallet?.balance ?? 0, loyaltyPoints: (wallet as any)?.loyaltyPoints ?? 0 };
+        return { balance: res.data ?? 0, loyaltyPoints: 0 };
       }));
   }
 
-  addFunds(data: AddFundsDto): Observable<Wallet> {
-    return this.http.post<ApiResponse<Wallet>>(`${this.apiUrl}/add-funds`, data)
+  addFunds(data: any): Observable<Wallet> {
+    const userId = this.getUserId();
+    const amount = typeof data === 'number' ? data : (data?.amount ?? 0);
+    return this.http.post<ApiResponse<Wallet>>(`${this.apiUrl}/user/${userId}/add-funds?amount=${amount}`, {})
       .pipe(map(res => this.extractData(res)));
   }
 
   getTransactions(): Observable<WalletTransaction[]> {
-    return this.http.get<ApiResponse<WalletTransaction[]>>(`${this.apiUrl}/transactions`)
-      .pipe(map(res => this.extractData(res) ?? []));
+    const userId = this.getUserId();
+    if (!userId) return of([]);
+    // Use the correct TransactionController path
+    return this.http.get<ApiResponse<any>>(`${environment.apiUrl}/api/transactions/user/${userId}`)
+      .pipe(map(res => {
+        const raw = res.data;
+        return (raw?.content || raw || []) as WalletTransaction[];
+      }));
   }
 
   getTransactionById(id: string): Observable<WalletTransaction> {
-    return this.http.get<ApiResponse<WalletTransaction>>(`${this.apiUrl}/transactions/${id}`)
+    return this.http.get<ApiResponse<WalletTransaction>>(`${environment.apiUrl}/api/transactions/${id}`)
       .pipe(map(res => this.extractData(res)));
+  }
+
+  private getUserId(): string | null {
+    try {
+      const userStr = localStorage.getItem('current_user') || localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user?.id?.toString() || null;
+      }
+      return null;
+    } catch { return null; }
   }
 }

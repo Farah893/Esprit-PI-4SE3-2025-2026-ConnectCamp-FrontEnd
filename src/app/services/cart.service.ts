@@ -204,7 +204,12 @@ export class CartService {
       }),
       catchError(e => {
         console.warn(`fetchCart failed (${e.status}) — returning local cart`);
-        return of(this.cartSubject.value);
+        // Fallback: calculate totals locally
+        const items = this.cartSubject.value;
+        const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+        this.cartTotalSubject.next(subtotal);
+        this.cartFinalSubject.next(subtotal - this.cartDiscountSubject.value);
+        return of(items);
       })
     );
   }

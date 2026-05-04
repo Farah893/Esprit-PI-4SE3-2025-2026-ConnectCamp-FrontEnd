@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PromotionService } from '../../modules/services/services/promotion.service';
 import { CartService } from '../../services/cart.service';
+import { WalletService } from '../../services/wallet.service';
 import { Subscription } from 'rxjs';
 
 interface LocalCartItem {
@@ -39,11 +40,13 @@ export class CartComponent implements OnInit, OnDestroy {
         private route: ActivatedRoute,
         private promotionService: PromotionService,
         private cartService: CartService,
+        private walletService: WalletService,
         private router: Router
     ) { }
 
     ngOnInit(): void {
         this.cartService.fetchCart().subscribe();
+        this.fetchWalletBalance();
 
         this.cartSub = this.cartService.cart$.subscribe(items => {
             this.cartItems = items.map(item => ({
@@ -99,11 +102,18 @@ export class CartComponent implements OnInit, OnDestroy {
             next: (res) => { 
                 this.promoResult = res; 
                 this.promoLoading = false;
-                // Refresh cart to get backend-calculated discount
-                this.cartService.fetchCart().subscribe();
+                
+                if (res.valide) {
+                    // Update local state for immediate feedback
+                    this.serverDiscount = res.reduction || 0;
+                    this.serverTotal = res.montantFinal || (this.subtotal - this.serverDiscount);
+                    
+                    // Refresh cart to sync with backend
+                    this.cartService.fetchCart().subscribe();
+                }
             },
             error: () => {
-                this.promoResult = { valide: false, message: 'Code invalide.' };
+                this.promoResult = { valide: false, message: 'Code invalide ou erreur serveur.' };
                 this.promoLoading = false;
             }
         });
@@ -157,7 +167,14 @@ export class CartComponent implements OnInit, OnDestroy {
 
     // ── Payment ───────────────────────────────────────────────────────────────
     selectedPayment: 'wallet' | 'card' = 'wallet';
-    walletBalance = 250.00;
+    walletBalance = 0;
+
+    private fetchWalletBalance(): void {
+        this.walletService.getBalance().subscribe({
+            next: (data) => this.walletBalance = data.balance,
+            error: () => console.warn('Could not fetch wallet balance')
+        });
+    }
 
     // Card form fields
     cardNumber = '';
