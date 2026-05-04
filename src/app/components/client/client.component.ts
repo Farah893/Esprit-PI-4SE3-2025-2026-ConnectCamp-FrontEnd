@@ -227,11 +227,25 @@ export class ClientComponent implements OnInit {
     this.promoResult = null;
     this.promotionService.validateCode(code, this.cartSubtotal).subscribe({
       next: (res) => {
-        this.promoResult = res;
-        this.promoLoading = false;
+        if (res.valide) {
+          const user = this.authService.getCurrentUser();
+          if (user?.id) {
+            this.promotionService.applyToCart(Number(user.id), code).subscribe(() => {
+              this.promoResult = res;
+              this.promoLoading = false;
+              this.cartService.fetchCart().subscribe();
+            });
+          } else {
+            this.promoResult = res;
+            this.promoLoading = false;
+          }
+        } else {
+          this.promoResult = res;
+          this.promoLoading = false;
+        }
       },
       error: (err) => {
-        this.promoResult = { valide: false, message: err?.error?.message || 'Erreur lors de la vérification du code.' };
+        this.promoResult = { valide: false, message: err?.error?.message || 'Erreur.' };
         this.promoLoading = false;
       }
     });

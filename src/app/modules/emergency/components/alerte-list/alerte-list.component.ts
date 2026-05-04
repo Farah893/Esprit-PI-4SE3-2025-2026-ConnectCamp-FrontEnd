@@ -39,12 +39,16 @@ export class AlerteListComponent implements OnInit {
     ngOnInit(): void {
         this.isAdmin = this.userService.isAdmin();
         const role = this.userService.getLoggedInUser()?.role as string;
-        this.isCamper = role === 'CAMPER' || role === 'PARTICIPANT' || role === 'USER';
+        this.isCamper = role === 'CAMPER' || role === 'PARTICIPANT' || role === 'USER' || role === 'CLIENT';
 
-        if (this.isCamper) {
+        // More resilient check for Admin list
+        const isListPage = window.location.href.includes('/list');
+
+        if (this.isCamper && !isListPage) {
             this.loadMyAlerts();
             this.loadAiSafetyBrief();
-        } else if (this.isAdmin) {
+        } else {
+            // Default to load all for admin view or list view
             this.loadAllAlerts();
         }
     }

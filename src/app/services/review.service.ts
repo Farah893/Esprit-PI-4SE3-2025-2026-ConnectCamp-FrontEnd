@@ -36,8 +36,11 @@ export class ReviewService {
     constructor(private http: HttpClient) { }
 
     getReviewsBySite(siteId: number): Observable<Review[]> {
-        return this.http.get<ReviewApiResponse[]>(`${this.apiUrl}/site/${siteId}`).pipe(
-            map((reviews) => reviews.map((review) => this.fromApi(review, siteId)))
+        return this.http.get<any>(`${this.apiUrl}/site/${siteId}`).pipe(
+            map((res) => {
+                const reviews = res.data?.content || res.data || [];
+                return reviews.map((review: ReviewApiResponse) => this.fromApi(review, siteId));
+            })
         );
     }
 
@@ -72,7 +75,11 @@ export class ReviewService {
     }
 
     createReview(siteId: number, review: Partial<Review>): Observable<Review> {
-        return this.http.post<ReviewApiResponse>(`${this.apiUrl}/site/${siteId}`, this.toApi(siteId, review)).pipe(
+        let params = {};
+        if (review.userId) {
+            params = { userId: review.userId };
+        }
+        return this.http.post<ReviewApiResponse>(`${this.apiUrl}/site/${siteId}`, this.toApi(siteId, review), { params }).pipe(
             map((created) => this.fromApi(created, siteId))
         );
     }
