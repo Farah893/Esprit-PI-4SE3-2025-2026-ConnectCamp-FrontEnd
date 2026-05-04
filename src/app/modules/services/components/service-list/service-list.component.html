@@ -370,13 +370,20 @@
               </div>
 
               <div>
-                <label class="text-[10px] font-bold text-gray-500 block mb-1">Your Comment</label>
-                <textarea [(ngModel)]="reviewData.comment" rows="2" class="w-full p-2 rounded-lg border text-sm" placeholder="Tell us more..."></textarea>
+                <label class="text-[10px] font-bold text-gray-500 block mb-1">Review Title</label>
+                <input type="text" [(ngModel)]="reviewData.title" placeholder="Summary of your experience" class="w-full p-2 rounded-lg border text-sm">
+                <p *ngIf="(reviewData.title?.length || 0) < 3" class="text-[9px] text-red-500 mt-1">Title must be at least 3 chars.</p>
               </div>
 
-              <button (click)="submitReview(service.id)" [disabled]="reviewLoading"
-                class="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg hover:bg-emerald-700 transition-all">
-                {{ reviewLoading ? 'Submitting...' : '✨ Submit to AI Advisor' }}
+              <div>
+                <label class="text-[10px] font-bold text-gray-500 block mb-1">Your Comment</label>
+                <textarea [(ngModel)]="reviewData.comment" rows="2" class="w-full p-2 rounded-lg border text-sm" placeholder="Tell us more about your experience..."></textarea>
+                <p *ngIf="(reviewData.comment?.length || 0) < 10" class="text-[9px] text-red-500 mt-1">Comment must be at least 10 characters.</p>
+              </div>
+
+              <button (click)="submitReview(service.id)" [disabled]="reviewLoading || (reviewData.comment?.length || 0) < 10 || (reviewData.title?.length || 0) < 3"
+                class="w-full bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-black text-xs uppercase shadow-lg hover:bg-emerald-700 transition-all">
+                {{ reviewLoading ? 'Submitting...' : '✨ Submit Review' }}
               </button>
             </div>
           </div>

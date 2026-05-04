@@ -245,8 +245,9 @@ export class PackListComponent implements OnInit {
         };
 
         this.reviewService.createServiceReview(targetServiceId, user.id, payload).subscribe({
-            next: () => {
-                alert('✨ Bundle sentiment saved! The AI Advisor will now prioritize this pack based on your feedback.');
+            next: (res: any) => {
+                const msg = res.message || '✨ Review submitted!';
+                alert(msg);
                 this.showReviewFormId = null;
                 this.reviewLoading = false;
             },

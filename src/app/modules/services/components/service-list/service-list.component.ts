@@ -339,8 +339,9 @@ export class ServiceListComponent implements OnInit {
         };
 
         this.reviewService.createServiceReview(serviceId, user.id, payload).subscribe({
-            next: () => {
-                alert('✨ Review submitted! Your feedback helps our AI learn.');
+            next: (res: any) => {
+                const msg = res.message || '✨ Review submitted!';
+                alert(msg);
                 this.showReviewFormId = null;
                 this.reviewLoading = false;
             },
