@@ -19,32 +19,16 @@ jobs:
         with:
           submodules: true
           lfs: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build Project
-        run: npm run build -- --configuration production
-
-      - name: Debug - Find index.html
-        run: find dist -name "index.html" -type f 2>/dev/null || echo "NO INDEX.HTML FOUND"
-
-      - name: Deploy to Azure
+      - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_LIVELY_WAVE_019E62B03 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "dist/frontConnect"
+          app_location: "/"
           api_location: ""
-          output_location: ""
-          skip_app_build: true
+          output_location: "dist/campconnect"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
