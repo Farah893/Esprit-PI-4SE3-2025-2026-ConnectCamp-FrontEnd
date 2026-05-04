@@ -38,8 +38,8 @@ jobs:
           action: "upload"
           app_location: "/" 
           api_location: "" 
-          output_location: "dist/frontConnect/browser" # On teste avec browser d'abord
-          skip_app_build: true # Très important : on a déjà fait le build au dessus
+          output_location: "dist/campconnect/browser" # LE VOILA LE COUPABLE !
+          skip_app_build: true 
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
