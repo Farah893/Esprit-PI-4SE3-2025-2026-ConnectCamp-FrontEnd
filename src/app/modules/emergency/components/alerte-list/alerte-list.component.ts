@@ -44,7 +44,25 @@ export class AlerteListComponent implements OnInit {
         if (this.isCamper) {
             this.loadMyAlerts();
             this.loadAiSafetyBrief();
+        } else if (this.isAdmin) {
+            this.loadAllAlerts();
         }
+    }
+
+    loadAllAlerts(): void {
+        this.loading = true;
+        console.log('Admin: Fetching active SOS alerts...');
+        this.alerteService.getAll().subscribe({
+            next: (alerts) => {
+                console.log('Admin: SOS Alerts received:', alerts);
+                this.myAlerts = alerts || [];
+                this.loading = false;
+            },
+            error: (err: any) => {
+                console.error('Admin: Error loading active alerts', err);
+                this.loading = false;
+            }
+        });
     }
 
     /** Flux automatique : GPS → EONET → IA — aucune action requise du camper */

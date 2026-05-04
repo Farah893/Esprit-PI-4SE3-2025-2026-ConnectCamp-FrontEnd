@@ -43,6 +43,7 @@ export class PackListComponent implements OnInit {
         title: 'Great Bundle'
     };
     reviewLoading = false;
+    reviewAlerts: Record<number, string> = {};
 
     constructor(
         private packService: PackService,
@@ -94,7 +95,7 @@ export class PackListComponent implements OnInit {
     isOrganizer(): boolean { return this.userService.isOrganizer(); }
     isParticipant(): boolean {
         const role = this.userService.getLoggedInUser()?.role;
-        return role === 'PARTICIPANT' || role === 'CAMPER' || role === 'USER';
+        return role === 'PARTICIPANT' || role === 'CAMPER' || role === 'USER' || role === 'CLIENT';
     }
     isCamper(): boolean {
         const role = this.userService.getLoggedInUser()?.role;
@@ -247,6 +248,7 @@ export class PackListComponent implements OnInit {
         this.reviewService.createServiceReview(targetServiceId, user.id, payload).subscribe({
             next: (res: any) => {
                 const msg = res.message || '✨ Review submitted!';
+                this.reviewAlerts[pack.id!] = res.message; // Capture AI alert for the pack
                 alert(msg);
                 this.showReviewFormId = null;
                 this.reviewLoading = false;

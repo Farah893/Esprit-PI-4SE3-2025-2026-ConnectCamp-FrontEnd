@@ -44,12 +44,29 @@ export class ReviewService {
     /** Service Reviews (AI Sentiment) */
     getReviewsByService(serviceId: number): Observable<any[]> {
         return this.http.get<any>(`${environment.apiUrl}/api/service-reviews/service/${serviceId}`).pipe(
-            map(response => response.data.content || [])
+            map(response => response.data?.content || [])
         );
+    }
+
+    // Alias for consistency with component calls
+    getServiceReviews(serviceId: number): Observable<any[]> {
+        return this.getReviewsByService(serviceId);
     }
 
     createServiceReview(serviceId: number, userId: number, review: any): Observable<any> {
         return this.http.post<any>(`${environment.apiUrl}/api/service-reviews/service/${serviceId}?userId=${userId}`, review).pipe(
+            map(response => response.data)
+        );
+    }
+
+    approveServiceReview(id: number): Observable<any> {
+        return this.http.patch<any>(`${environment.apiUrl}/api/service-reviews/${id}/approve`, {}).pipe(
+            map(response => response.data)
+        );
+    }
+
+    deleteServiceReview(id: number): Observable<any> {
+        return this.http.delete<any>(`${environment.apiUrl}/api/service-reviews/${id}`).pipe(
             map(response => response.data)
         );
     }

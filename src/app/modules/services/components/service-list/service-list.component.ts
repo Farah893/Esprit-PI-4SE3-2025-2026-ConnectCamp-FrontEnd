@@ -51,6 +51,11 @@ export class ServiceListComponent implements OnInit {
         title: 'Great service'
     };
     reviewLoading = false;
+    reviewAlerts: Record<number, string> = {};
+    
+    // Admin Review Management
+    serviceReviews: Record<number, any[]> = {};
+    reviewsLoading: Record<number, boolean> = {};
 
     @Input() adminViewMode: 'ALL' | 'USER' | 'ORGANIZER' = 'ALL';
 
@@ -110,7 +115,7 @@ export class ServiceListComponent implements OnInit {
     isOrganizer(): boolean { return this.userService.isOrganizer(); }
     isParticipant(): boolean {
         const role = this.userService.getLoggedInUser()?.role;
-        return role === 'PARTICIPANT' || role === 'CAMPER' || role === 'USER';
+        return role === 'PARTICIPANT' || role === 'CAMPER' || role === 'USER' || role === 'CLIENT';
     }
     isUser(): boolean {
         const role = this.userService.getLoggedInUser()?.role;
@@ -341,6 +346,7 @@ export class ServiceListComponent implements OnInit {
         this.reviewService.createServiceReview(serviceId, user.id, payload).subscribe({
             next: (res: any) => {
                 const msg = res.message || '✨ Review submitted!';
+                this.reviewAlerts[serviceId] = res.message; // Capture AI alert
                 alert(msg);
                 this.showReviewFormId = null;
                 this.reviewLoading = false;
@@ -370,5 +376,44 @@ export class ServiceListComponent implements OnInit {
 
     closeReputation(serviceId: number): void {
         delete this.reputationResults[serviceId];
+    }
+
+    // ── Admin Review Resolution ───────────────────────────────────────
+    loadServiceReviews(serviceId: number): void {
+        this.reviewsLoading[serviceId] = true;
+        this.reviewService.getServiceReviews(serviceId).subscribe({
+            next: (res: any) => {
+                this.serviceReviews[serviceId] = res.data?.content || [];
+                this.reviewsLoading[serviceId] = false;
+            },
+            error: (err: any) => {
+                console.error('Error loading reviews', err);
+                this.reviewsLoading[serviceId] = false;
+            }
+        });
+    }
+
+    approveReview(reviewId: number, serviceId: number): void {
+        if (confirm('Are you sure you want to manually approve this review? AI flagged it as inconsistent.')) {
+            this.reviewService.approveServiceReview(reviewId).subscribe({
+                next: () => {
+                    alert('✅ Review approved successfully.');
+                    this.loadServiceReviews(serviceId);
+                },
+                error: (err: any) => alert('Failed to approve review.')
+            });
+        }
+    }
+
+    deleteReviewManually(reviewId: number, serviceId: number): void {
+        if (confirm('Are you sure you want to delete this review?')) {
+            this.reviewService.deleteServiceReview(reviewId).subscribe({
+                next: () => {
+                    alert('🗑️ Review deleted.');
+                    this.loadServiceReviews(serviceId);
+                },
+                error: (err: any) => alert('Failed to delete review.')
+            });
+        }
     }
 }
